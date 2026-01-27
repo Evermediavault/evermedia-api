@@ -3,6 +3,8 @@ import compress from "@fastify/compress";
 import { settings, isProduction } from "./core/config.js";
 import { getLogger } from "./core/logger.js";
 import { dbPlugin } from "./db/session.js";
+import { initializeDatabase } from "./db/init.js";
+import { i18nPlugin } from "./i18n/middleware.js";
 import { corsPlugin } from "./middleware/cors.js";
 import { loggingPlugin } from "./middleware/logging.js";
 import { errorHandler } from "./middleware/exception.js";
@@ -33,6 +35,9 @@ export const createApplication = async (): Promise<FastifyInstance> => {
   // 注册 CORS 中间件
   await app.register(corsPlugin);
 
+  // 注册 i18n 中间件（需要在其他路由之前注册）
+  await app.register(i18nPlugin);
+
   // 注册数据库插件
   await app.register(dbPlugin);
 
@@ -60,6 +65,9 @@ export const createApplication = async (): Promise<FastifyInstance> => {
       environment: settings.ENVIRONMENT,
       version: settings.APP_VERSION,
     });
+
+    // 初始化数据库（检查表是否存在，创建默认管理员账户）
+    await initializeDatabase();
   });
 
   app.addHook("onClose", async () => {

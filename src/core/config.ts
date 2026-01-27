@@ -118,6 +118,21 @@ const configSchema = z.object({
       return validLevels.includes(upper) ? upper : "INFO";
     }),
   LOG_FORMAT: z.string().default("json"),
+
+  // 默认账户配置
+  DEFAULT_ADMIN_USERNAME: z.string().default("admin"),
+  DEFAULT_ADMIN_PASSWORD: z.string().default("admin123456"),
+  DEFAULT_ADMIN_EMAIL: z.string().default("admin@evermediavault.com"),
+  DEFAULT_ADMIN_ROLE: z.string().default("admin"),
+
+  // i18n 配置
+  DEFAULT_LOCALE: z
+    .string()
+    .default("zh-CN")
+    .transform((val) => {
+      const validLocales = ["zh-CN", "en-US"];
+      return validLocales.includes(val) ? val : "zh-CN";
+    }),
 });
 
 /**

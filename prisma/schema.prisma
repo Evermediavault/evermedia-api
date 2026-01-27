@@ -12,15 +12,21 @@ datasource db {
   // pool_timeout     = 20
 }
 
-// 基础模型，包含通用字段
-// 注意：Prisma 不支持继承，需要在每个模型中手动添加这些字段
-// 或者使用 Prisma 的抽象模型（abstract models）在 Prisma 5.0+
+// 用户模型
+model User {
+  id            Int       @id @default(autoincrement())
+  uid           String    @unique @default(uuid()) @db.VarChar(36)
+  username      String    @unique @db.VarChar(100)
+  email         String    @unique @db.VarChar(255)
+  password      String    @db.VarChar(255)
+  role          String    @default("user") @db.VarChar(50)
+  last_login_at DateTime?
+  last_login_ip String?   @db.VarChar(45)
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
 
-// 示例：用户模型（可根据实际需求修改）
-// model User {
-//   id        Int      @id @default(autoincrement())
-//   created_at DateTime @default(now())
-//   updated_at DateTime @updatedAt
-//
-//   @@map("users")
-// }
+  @@map("users")
+  @@index([uid])
+  @@index([username])
+  @@index([email])
+}
