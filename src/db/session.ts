@@ -19,10 +19,8 @@ declare module "fastify" {
 export const dbPlugin: FastifyPluginAsync = async (fastify) => {
   const prisma = getPrismaClient();
 
-  // 将 Prisma 客户端添加到 Fastify 实例
   fastify.decorate("db", prisma);
 
-  // 应用关闭时断开数据库连接
   fastify.addHook("onClose", async () => {
     await prisma.$disconnect();
   });

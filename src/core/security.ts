@@ -1,6 +1,5 @@
-import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
-import { settings } from "./config.js";
+import { sign, verify } from "../utils/jwt.js";
 
 /**
  * 验证密码
@@ -28,9 +27,9 @@ export const getPasswordHash = async (password: string): Promise<string> => {
 };
 
 /**
- * 创建 JWT 访问令牌
+ * 创建 JWT 访问令牌（委托至 utils/jwt）
  *
- * @param data - 要编码的数据
+ * @param data - 需包含 sub (uid)，可选 role、username
  * @param expiresInMinutes - 过期时间（分钟），可选
  * @returns JWT 令牌
  */
@@ -38,36 +37,23 @@ export const createAccessToken = (
   data: Record<string, unknown>,
   expiresInMinutes?: number
 ): string => {
-  const expiresIn = expiresInMinutes
-    ? `${expiresInMinutes}m`
-    : `${settings.ACCESS_TOKEN_EXPIRE_MINUTES}m`;
-
-  return jwt.sign(data, settings.SECRET_KEY, {
-    algorithm: settings.ALGORITHM as jwt.Algorithm,
-    expiresIn,
-  });
+  const payload = {
+    sub: data.sub as string,
+    role: data.role as string | undefined,
+    username: data.username as string | undefined,
+  };
+  return sign(payload, { expiresInMinutes });
 };
 
 /**
- * 解码 JWT 访问令牌
+ * 解码并验证 JWT 访问令牌（委托至 utils/jwt）
  *
  * @param token - JWT 令牌
- * @returns 解码后的数据，如果无效则返回 null
+ * @returns 解码后的 payload，无效则返回 null
  */
 export const decodeAccessToken = (
   token: string
 ): Record<string, unknown> | null => {
-  try {
-    const decoded = jwt.verify(token, settings.SECRET_KEY, {
-      algorithms: [settings.ALGORITHM as jwt.Algorithm],
-    });
-
-    if (typeof decoded === "object" && decoded !== null) {
-      return decoded as Record<string, unknown>;
-    }
-
-    return null;
-  } catch (error) {
-    return null;
-  }
+  const payload = verify(token);
+  return payload ? (payload as unknown as Record<string, unknown>) : null;
 };

@@ -3,9 +3,9 @@ import compress from "@fastify/compress";
 import { settings, isProduction } from "./core/config.js";
 import { getLogger } from "./core/logger.js";
 import { dbPlugin } from "./db/session.js";
+import { synapsePlugin } from "./synapse/plugin.js";
 import { initializeDatabase } from "./db/init.js";
 import { i18nPlugin } from "./i18n/middleware.js";
-import { corsPlugin } from "./middleware/cors.js";
 import { loggingPlugin } from "./middleware/logging.js";
 import { errorHandler } from "./middleware/exception.js";
 import { apiV1Router } from "./api/v1/router.js";
@@ -20,26 +20,32 @@ const logger = getLogger("app");
 export const createApplication = async (): Promise<FastifyInstance> => {
   // 创建 Fastify 实例
   const app = Fastify({
-    logger: false, // 使用自定义日志
-    disableRequestLogging: true, // 使用自定义请求日志
+    logger: false,
+    disableRequestLogging: true,
   });
 
-  // 注册 GZip 压缩中间件
-  await app.register(compress, {
-    threshold: 1000, // 最小压缩大小
+  // CORS：根 app 上直接 addHook，保证预检和所有响应都有头
+  app.addHook("onRequest", async (request, reply) => {
+    const origin = request.headers.origin || "*";
+    reply.header("Access-Control-Allow-Origin", origin);
+    reply.header("Access-Control-Allow-Credentials", "true");
+    reply.header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS,HEAD");
+    reply.header("Access-Control-Allow-Headers", "*");
+    if (request.method === "OPTIONS") {
+      return reply.status(204).send();
+    }
   });
 
-  // 注册请求日志中间件
+  await app.register(compress, { threshold: 1000 });
   await app.register(loggingPlugin);
-
-  // 注册 CORS 中间件
-  await app.register(corsPlugin);
 
   // 注册 i18n 中间件（需要在其他路由之前注册）
   await app.register(i18nPlugin);
 
   // 注册数据库插件
   await app.register(dbPlugin);
+  // 注册 Synapse（Filecoin Onchain Cloud）插件
+  await app.register(synapsePlugin);
 
   // 注册异常处理
   app.setErrorHandler(errorHandler);

@@ -11,6 +11,17 @@ import { createErrorResponse } from "../schemas/response.js";
 const logger = getLogger("exception");
 
 /**
+ * 为错误响应补上 CORS 头（错误路径可能不经过 CORS 插件）
+ */
+function setCorsHeaders(request: FastifyRequest, reply: FastifyReply): void {
+  const origin = request.headers.origin;
+  reply.header("Access-Control-Allow-Origin", origin || "*");
+  reply.header("Access-Control-Allow-Credentials", "true");
+  reply.header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS,HEAD");
+  reply.header("Access-Control-Allow-Headers", "*");
+}
+
+/**
  * 异常处理函数
  */
 export const errorHandler = (
@@ -18,6 +29,8 @@ export const errorHandler = (
   request: FastifyRequest,
   reply: FastifyReply
 ): void => {
+  setCorsHeaders(request, reply);
+
   // 处理自定义 API 异常
   if (error instanceof BaseAPIException) {
     logger.warn({

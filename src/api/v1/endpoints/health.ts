@@ -37,9 +37,9 @@ export const healthRouter: FastifyPluginAsync = async (fastify) => {
    * GET /health/ready
    * Kubernetes 就绪探针端点，检查数据库连接
    */
-  fastify.get("/health/ready", async (request, reply: FastifyReply) => {
+  fastify.get("/health/ready", async (_request, reply: FastifyReply) => {
     try {
-      const db = getDb(request);
+      const db = getDb();
       // 执行简单查询检查数据库连接
       await db.$queryRaw`SELECT 1`;
 

@@ -45,7 +45,7 @@ const configSchema = z.object({
   API_REDOC_URL: z.string().nullable().default("/redoc"),
 
   // 服务器配置
-  HOST: z.string().default("0.0.0.0"),
+  HOST: z.string().default("127.0.0.1"),
   PORT: z
     .string()
     .transform((val) => parseInt(val, 10))
@@ -93,8 +93,26 @@ const configSchema = z.object({
   // CORS配置
   CORS_ORIGINS: z
     .string()
-    .default("http://localhost:3000,http://localhost:8080")
-    .transform((val) => val.split(",").map((s) => s.trim())),
+    .default(
+      "http://localhost:3000,http://localhost:8080,http://localhost:9000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:8080,http://127.0.0.1:9000,http://127.0.0.1:5173"
+    )
+    .transform((val) => {
+      const s = val.trim();
+      if (s.startsWith("[")) {
+        try {
+          const arr = JSON.parse(s) as unknown;
+          return Array.isArray(arr) ? arr.map((x) => String(x).trim()).filter(Boolean) : [s];
+        } catch {
+          return s.split(",").map((x) => x.trim()).filter(Boolean);
+        }
+      }
+      return s.split(",").map((x) => x.trim()).filter(Boolean);
+    }),
+  /** 为 true 时允许任意 origin（开发方便，生产慎用） */
+  CORS_ORIGIN_ALLOW_ALL: z
+    .string()
+    .transform((val) => val === "true")
+    .default("false"),
   CORS_CREDENTIALS: z
     .string()
     .transform((val) => val === "true")
@@ -133,6 +151,28 @@ const configSchema = z.object({
       const validLocales = ["zh-CN", "en-US"];
       return validLocales.includes(val) ? val : "zh-CN";
     }),
+
+  // Synapse (Filecoin Onchain Cloud) 配置
+  /** RPC URL，不设则按 SYNAPSE_NETWORK 使用默认端点 */
+  SYNAPSE_RPC_URL: z.string().optional().default(""),
+  /** 网络：mainnet | calibration */
+  SYNAPSE_NETWORK: z
+    .string()
+    .default("calibration")
+    .transform((val) => {
+      const v = val.toLowerCase();
+      return v === "mainnet" ? "mainnet" : "calibration";
+    }),
+  /** 是否使用 CDN 检索 */
+  SYNAPSE_WITH_CDN: z
+    .string()
+    .transform((val) => val === "true")
+    .default("false"),
+  /** 是否包含 dev 状态 SP（开发用） */
+  SYNAPSE_DEV: z
+    .string()
+    .transform((val) => val === "true")
+    .default("false"),
 });
 
 /**
