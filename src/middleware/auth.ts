@@ -6,6 +6,7 @@
  * 可选登录路由：preHandler: [authToken]，handler 内用 request.user 判断
  * 必须登录路由：preHandler: [authToken, requireAuth]
  * 必须角色：   preHandler: [authToken, requireAuth, requireRoles(['admin'])]
+ * 必须管理员：preHandler: [authToken, requireAuth, requireAdmin]
  */
 import type { FastifyRequest, FastifyReply } from "fastify";
 import { UnauthorizedError, ForbiddenError } from "../core/exceptions.js";
@@ -95,3 +96,6 @@ export function requireRoles(roles: string[]) {
     }
   };
 }
+
+/** 必须管理员（PreHandler），等价于 requireRoles(['admin']) */
+export const requireAdmin = requireRoles(["admin"]);

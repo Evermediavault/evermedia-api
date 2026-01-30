@@ -28,6 +28,7 @@ export default {
   // 表单验证
   validation: {
     required: "此字段为必填项",
+    invalidParams: "请求参数无效",
     email: "请输入有效的邮箱地址",
     url: "请输入有效的URL地址",
     password: "密码至少8位，包含大小写字母、数字和特殊字符",
@@ -57,6 +58,7 @@ export default {
 
   // 成功提示
   success: {
+    list: "获取成功",
     saved: "保存成功",
     deleted: "删除成功",
     updated: "更新成功",

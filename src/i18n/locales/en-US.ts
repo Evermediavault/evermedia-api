@@ -28,6 +28,7 @@ export default {
   // Form validation
   validation: {
     required: "This field is required",
+    invalidParams: "Invalid request parameters",
     email: "Please enter a valid email address",
     url: "Please enter a valid URL",
     password: "Password must be at least 8 characters, containing uppercase, lowercase, numbers and special characters",
@@ -57,6 +58,7 @@ export default {
 
   // Success messages
   success: {
+    list: "Retrieved successfully",
     saved: "Saved successfully",
     deleted: "Deleted successfully",
     updated: "Updated successfully",

@@ -25,8 +25,33 @@ model User {
   created_at    DateTime  @default(now())
   updated_at    DateTime  @updatedAt
 
+  files File[]
+
   @@map("users")
   @@index([uid])
   @@index([username])
   @@index([email])
+}
+
+// 文件模型（Synapse 上传记录）
+model File {
+  id               Int       @id @default(autoincrement())
+  name             String    @db.VarChar(255)
+  file_type        String    @db.VarChar(128)
+  metadata         Json      @db.Json
+  uploader_id      Int
+  permission       String    @default("public") @db.VarChar(32)
+  cost             Decimal   @db.Decimal(36, 18)
+  project_name    String?   @db.VarChar(255)
+  project_info     Json?     @db.Json
+  synapse_index_id String    @db.VarChar(255)
+  uploaded_at      DateTime  @default(now())
+  deleted_at       DateTime?
+
+  uploader User @relation(fields: [uploader_id], references: [id], onDelete: Restrict)
+
+  @@map("files")
+  @@index([uploader_id])
+  @@index([synapse_index_id])
+  @@index([deleted_at])
 }
