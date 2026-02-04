@@ -42,8 +42,19 @@ export default {
     range: "Value must be between {min} and {max}",
   },
 
+  // Health check
+  health: {
+    healthy: "Service is healthy",
+    alive: "Service is alive",
+    ready: "Service is ready",
+    notReady: "Service is not ready",
+  },
+
   // Error messages
   error: {
+    dbOperationFailed: "Database operation failed",
+    dbConnectionFailed: "Database connection failed",
+    internalServerError: "Internal server error",
     network: "Network error, please check your connection",
     timeout: "Request timeout, please try again later",
     server: "Server error, please try again later",
@@ -110,6 +121,17 @@ export default {
     emailRequired: "Email is required",
     passwordRequired: "Password is required",
     emailInvalid: "Invalid email format",
+  },
+
+  // Upload / media
+  media: {
+    fileRequired: "Please select a file to upload",
+    fileTypeNotAllowed: "File type not allowed",
+    fileTooLarge: "File too large, check size limit",
+    storageUnavailable: "Storage service unavailable",
+    uploadFailed: "Upload to storage failed",
+    listFailed: "Failed to get file list",
+    metadataNameValueRequired: "Metadata name and value must not be empty for each entry",
   },
 
   // Server related

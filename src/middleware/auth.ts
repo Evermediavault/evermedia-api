@@ -11,6 +11,7 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
 import { UnauthorizedError, ForbiddenError } from "../core/exceptions.js";
 import { createErrorResponse } from "../schemas/response.js";
+import { getMsg } from "../i18n/utils.js";
 import {
   extractBearerToken,
   verify,
@@ -52,10 +53,7 @@ export async function requireAuth(
   if (!request.user) {
     const err = new UnauthorizedError("Login required");
     return reply.status(err.statusCode).send(
-      createErrorResponse(
-        request.t ? request.t("auth.loginRequired") : err.message,
-        err.statusCode
-      )
+      createErrorResponse(getMsg(request, "auth.loginRequired", err.message), err.statusCode)
     );
   }
 }
@@ -77,10 +75,7 @@ export function requireRoles(roles: string[]) {
     if (!request.user) {
       const err = new UnauthorizedError("Login required");
       return reply.status(err.statusCode).send(
-        createErrorResponse(
-          request.t ? request.t("auth.loginRequired") : err.message,
-          err.statusCode
-        )
+        createErrorResponse(getMsg(request, "auth.loginRequired", err.message), err.statusCode)
       );
     }
 
@@ -88,10 +83,7 @@ export function requireRoles(roles: string[]) {
     if (!set.has(role)) {
       const err = new ForbiddenError("Insufficient permissions");
       return reply.status(err.statusCode).send(
-        createErrorResponse(
-          request.t ? request.t("auth.permissionDenied") : err.message,
-          err.statusCode
-        )
+        createErrorResponse(getMsg(request, "auth.permissionDenied", err.message), err.statusCode)
       );
     }
   };

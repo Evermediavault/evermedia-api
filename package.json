@@ -20,7 +20,8 @@
     "prisma:studio": "prisma studio",
     "prisma:push": "prisma db push",
     "prisma:reset": "prisma migrate reset",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "synapse:approve": "tsx scripts/synapse-approve.ts"
   },
   "keywords": [
     "api",
@@ -33,6 +34,7 @@
   "dependencies": {
     "@fastify/compress": "^8.0.0",
     "@fastify/cors": "^10.0.1",
+    "@fastify/multipart": "9.4.0",
     "@filoz/synapse-sdk": "0.36.1",
     "@prisma/client": "^5.20.0",
     "bcrypt": "^5.1.1",

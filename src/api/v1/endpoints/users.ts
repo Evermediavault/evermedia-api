@@ -1,7 +1,8 @@
 import { FastifyPluginAsync } from "fastify";
 import { getDb } from "../../deps.js";
 import { authToken, requireAuth, requireAdmin } from "../../../middleware/auth.js";
-import { createErrorResponse, createPaginationMeta } from "../../../schemas/response.js";
+import { createErrorResponse, createPaginationMeta, createPaginatedResponse } from "../../../schemas/response.js";
+import { getMsg } from "../../../i18n/utils.js";
 import {
   UserListQuerySchema,
   type UserListQuery,
@@ -20,8 +21,7 @@ export const usersRouter: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const parsed = UserListQuerySchema.safeParse(request.query);
       if (!parsed.success) {
-        const msg =
-          request.t ? request.t("validation.invalidParams") : "Invalid query parameters";
+        const msg = getMsg(request, "validation.invalidParams", "Invalid query parameters");
         return reply.status(400).send(createErrorResponse(msg, 400, parsed.error.flatten()));
       }
       const { page, page_size, sort_by, order } = parsed.data;
@@ -56,13 +56,8 @@ export const usersRouter: FastifyPluginAsync = async (fastify) => {
       }));
 
       const meta = createPaginationMeta(page, page_size, total);
-      const message = request.t ? request.t("success.list") : "OK";
-      return reply.status(200).send({
-        success: true as const,
-        message,
-        data,
-        meta,
-      });
+      const message = getMsg(request, "success.list", "OK");
+      return reply.status(200).send(createPaginatedResponse(message, data, meta));
     }
   );
 };

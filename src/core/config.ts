@@ -173,6 +173,32 @@ const configSchema = z.object({
     .string()
     .transform((val) => val === "true")
     .default("false"),
+  /** 上传时是否强制创建新 dataset（避免复用链上有但 SP 未同步的 id 导致 Data set not found） */
+  SYNAPSE_FORCE_CREATE_DATA_SET: z
+    .string()
+    .transform((val) => val === "false" ? false : true)
+    .default("true"),
+
+  // 上传配置（仅管理员上传接口）
+  /** 允许的 MIME 类型，逗号分隔；* 表示不限制类型（生产建议白名单） */
+  UPLOAD_ALLOWED_FILE_TYPES: z
+    .string()
+    .default("*")
+    .transform((val) => {
+      const s = val.trim();
+      if (s === "*") return "*";
+      return s.split(",").map((x) => x.trim()).filter(Boolean);
+    }),
+  /** 单次请求最多文件数 */
+  UPLOAD_MAX_FILES: z
+    .string()
+    .transform((val) => parseInt(val, 10))
+    .default("4"),
+  /** 单文件最大尺寸（KB） */
+  UPLOAD_MAX_FILE_SIZE_KB: z
+    .string()
+    .transform((val) => parseInt(val, 10))
+    .default("10240"),
 });
 
 /**

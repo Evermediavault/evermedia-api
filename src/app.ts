@@ -1,5 +1,6 @@
 import Fastify, { FastifyInstance } from "fastify";
 import compress from "@fastify/compress";
+import multipart from "@fastify/multipart";
 import { settings, isProduction } from "./core/config.js";
 import { getLogger } from "./core/logger.js";
 import { dbPlugin } from "./db/session.js";
@@ -37,6 +38,11 @@ export const createApplication = async (): Promise<FastifyInstance> => {
   });
 
   await app.register(compress, { threshold: 1000 });
+  await app.register(multipart, {
+    limits: {
+      fileSize: (settings.UPLOAD_MAX_FILE_SIZE_KB ?? 10240) * 1024,
+    },
+  });
   await app.register(loggingPlugin);
 
   // 注册 i18n 中间件（需要在其他路由之前注册）

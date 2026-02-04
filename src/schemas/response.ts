@@ -107,6 +107,22 @@ export const createSuccessResponse = <T>(
 };
 
 /**
+ * 创建分页成功响应
+ */
+export const createPaginatedResponse = <T>(
+  message: string,
+  data: T[],
+  meta: PaginationMeta
+): PaginatedResponse<T> => {
+  return {
+    success: true,
+    message,
+    data,
+    meta,
+  };
+};
+
+/**
  * 创建错误响应
  */
 export const createErrorResponse = (

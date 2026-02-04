@@ -2,6 +2,7 @@ import { FastifyPluginAsync } from "fastify";
 import { getDb } from "../../deps.js";
 import { verifyPassword } from "../../../core/security.js";
 import { createSuccessResponse, createErrorResponse } from "../../../schemas/response.js";
+import { getMsg } from "../../../i18n/utils.js";
 import { LoginBodySchema } from "../../../schemas/auth.js";
 import { sign, payloadFromUser } from "../../../utils/jwt.js";
 
@@ -22,8 +23,8 @@ export const authRouter: FastifyPluginAsync = async (fastify) => {
   }>("/admin/login", async (request, reply) => {
     const parsed = LoginBodySchema.safeParse(request.body);
     if (!parsed.success) {
-      const msg = request.t ? request.t("validation.required") : "Username and password are required";
-      return reply.status(400).send(createErrorResponse(msg, 400, parsed.error.flatten()));
+      const msg = getMsg(request, "validation.required", "Username and password are required");
+      return reply.status(400).send(createErrorResponse(msg, 400));
     }
     const { username, password } = parsed.data;
 
@@ -33,18 +34,18 @@ export const authRouter: FastifyPluginAsync = async (fastify) => {
     });
 
     if (!user) {
-      const msg = request.t ? request.t("auth.invalidCredentials") : "Invalid username or password";
+      const msg = getMsg(request, "auth.invalidCredentials", "Invalid username or password");
       return reply.status(401).send(createErrorResponse(msg, 401));
     }
 
     const ok = await verifyPassword(password, user.password);
     if (!ok) {
-      const msg = request.t ? request.t("auth.invalidCredentials") : "Invalid username or password";
+      const msg = getMsg(request, "auth.invalidCredentials", "Invalid username or password");
       return reply.status(401).send(createErrorResponse(msg, 401));
     }
 
     if ((user.role ?? "").toLowerCase() !== ADMIN_ROLE) {
-      const msg = request.t ? request.t("auth.permissionDenied") : "Admin role required";
+      const msg = getMsg(request, "auth.permissionDenied", "Admin role required");
       return reply.status(403).send(createErrorResponse(msg, 403));
     }
 
@@ -64,7 +65,7 @@ export const authRouter: FastifyPluginAsync = async (fastify) => {
     }));
 
     return reply.status(200).send(
-      createSuccessResponse(request.t ? request.t("success.login") : "Login successful", {
+      createSuccessResponse(getMsg(request, "success.login", "Login successful"), {
         token,
         user: {
           uid: user.uid,

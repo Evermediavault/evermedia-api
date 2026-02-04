@@ -1,9 +1,9 @@
 import { z } from "zod";
 
-/** 登录请求体 */
+/** 登录请求体（校验文案由 handler 通过 i18n 返回） */
 export const LoginBodySchema = z.object({
-  username: z.string().min(1, "Username is required"),
-  password: z.string().min(1, "Password is required"),
+  username: z.string().min(1),
+  password: z.string().min(1),
 });
 
 export type LoginBody = z.infer<typeof LoginBodySchema>;

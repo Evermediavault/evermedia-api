@@ -41,7 +41,6 @@ export const getSynapse = async (): Promise<SynapseInstance | null> => {
       const rpcURL =
         settings.SYNAPSE_RPC_URL ||
         (network === "mainnet" ? RPC_URLS.mainnet.websocket : RPC_URLS.calibration.websocket);
-
       const instance = await Synapse.create({
         privateKey,
         rpcURL,

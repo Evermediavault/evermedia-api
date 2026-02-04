@@ -7,6 +7,7 @@ import {
   InternalServerError,
 } from "../core/exceptions.js";
 import { createErrorResponse } from "../schemas/response.js";
+import { getMsg } from "../i18n/utils.js";
 
 const logger = getLogger("exception");
 
@@ -68,8 +69,9 @@ export const errorHandler = (
       meta: error.meta,
     });
 
+    const message = getMsg(request, "error.dbOperationFailed", dbError.message);
     const errorResponse = createErrorResponse(
-      dbError.message,
+      message,
       dbError.statusCode,
       process.env.DEBUG === "true" ? error.message : undefined
     );
@@ -89,8 +91,9 @@ export const errorHandler = (
 
     const dbError = new DatabaseError("数据库连接失败", error.message);
 
+    const message = getMsg(request, "error.dbConnectionFailed", dbError.message);
     const errorResponse = createErrorResponse(
-      dbError.message,
+      message,
       dbError.statusCode,
       process.env.DEBUG === "true" ? error.message : undefined
     );
@@ -110,9 +113,10 @@ export const errorHandler = (
   });
 
   const internalError = new InternalServerError("服务器内部错误");
+  const message = getMsg(request, "error.internalServerError", internalError.message);
 
   const errorResponse = createErrorResponse(
-    internalError.message,
+    message,
     internalError.statusCode,
     process.env.DEBUG === "true" ? error.message : undefined
   );

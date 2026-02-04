@@ -42,8 +42,19 @@ export default {
     range: "数值必须在 {min} 到 {max} 之间",
   },
 
+  // 健康检查
+  health: {
+    healthy: "服务正常运行",
+    alive: "服务存活",
+    ready: "服务就绪",
+    notReady: "服务未就绪",
+  },
+
   // 错误提示
   error: {
+    dbOperationFailed: "数据库操作失败",
+    dbConnectionFailed: "数据库连接失败",
+    internalServerError: "服务器内部错误",
     network: "网络错误，请检查网络连接",
     timeout: "请求超时，请稍后重试",
     server: "服务器错误，请稍后重试",
@@ -110,6 +121,17 @@ export default {
     emailRequired: "邮箱不能为空",
     passwordRequired: "密码不能为空",
     emailInvalid: "邮箱格式不正确",
+  },
+
+  // 上传/媒体
+  media: {
+    fileRequired: "请选择要上传的文件",
+    fileTypeNotAllowed: "不允许该文件类型",
+    fileTooLarge: "文件过大，请检查大小限制",
+    storageUnavailable: "存储服务暂不可用",
+    uploadFailed: "上传到存储失败",
+    listFailed: "获取文件列表失败",
+    metadataNameValueRequired: "元数据每条目的名称与值均不能为空",
   },
 
   // 服务器相关

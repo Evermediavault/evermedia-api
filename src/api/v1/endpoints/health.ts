@@ -1,7 +1,8 @@
 import { FastifyPluginAsync, FastifyReply } from "fastify";
 import { getDb } from "../../deps.js";
 import { settings } from "../../../core/config.js";
-import { createSuccessResponse } from "../../../schemas/response.js";
+import { createSuccessResponse, createErrorResponse } from "../../../schemas/response.js";
+import { getMsg } from "../../../i18n/utils.js";
 
 /**
  * 健康检查路由插件
@@ -11,8 +12,9 @@ export const healthRouter: FastifyPluginAsync = async (fastify) => {
    * 基础健康检查
    * GET /health
    */
-  fastify.get("/health", async () => {
-    return createSuccessResponse("服务正常运行", {
+  fastify.get("/health", async (request) => {
+    const msg = getMsg(request, "health.healthy", "Service is healthy");
+    return createSuccessResponse(msg, {
       status: "healthy",
       timestamp: new Date().toISOString(),
       version: settings.APP_VERSION,
@@ -25,8 +27,9 @@ export const healthRouter: FastifyPluginAsync = async (fastify) => {
    * GET /health/live
    * Kubernetes 存活探针端点
    */
-  fastify.get("/health/live", async () => {
-    return createSuccessResponse("服务存活", {
+  fastify.get("/health/live", async (request) => {
+    const msg = getMsg(request, "health.alive", "Service is alive");
+    return createSuccessResponse(msg, {
       status: "alive",
       timestamp: new Date().toISOString(),
     });
@@ -37,23 +40,22 @@ export const healthRouter: FastifyPluginAsync = async (fastify) => {
    * GET /health/ready
    * Kubernetes 就绪探针端点，检查数据库连接
    */
-  fastify.get("/health/ready", async (_request, reply: FastifyReply) => {
+  fastify.get("/health/ready", async (request, reply: FastifyReply) => {
     try {
       const db = getDb();
-      // 执行简单查询检查数据库连接
       await db.$queryRaw`SELECT 1`;
 
-      return createSuccessResponse("服务就绪", {
+      const msg = getMsg(request, "health.ready", "Service is ready");
+      return createSuccessResponse(msg, {
         status: "ready",
         timestamp: new Date().toISOString(),
         database: "connected",
       });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-
-      // 注意：这里返回 503 状态码表示服务不可用
+      const msg = getMsg(request, "health.notReady", "Service is not ready");
       return reply.status(503).send(
-        createSuccessResponse("服务未就绪", {
+        createErrorResponse(msg, 503, {
           status: "not_ready",
           timestamp: new Date().toISOString(),
           database: "disconnected",
