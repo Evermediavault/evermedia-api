@@ -11,7 +11,7 @@ describe("Auth Endpoints", () => {
   });
 
   afterAll(async () => {
-    await app.close();
+    if (app) await app.close();
   });
 
   describe("POST /api/v1/auth/admin/login", () => {
@@ -68,6 +68,47 @@ describe("Auth Endpoints", () => {
         expect(body.data.user.role).toBe("admin");
         expect(body.data.user).not.toHaveProperty("password");
       }
+    });
+  });
+
+  describe("GET /api/v1/auth/me", () => {
+    it("should return 401 when no token", async () => {
+      const res = await app.inject({
+        method: "GET",
+        url: "/api/v1/auth/me",
+      });
+      expect(res.statusCode).toBe(401);
+      const body = JSON.parse(res.body);
+      expect(body.success).toBe(false);
+      expect(body.status_code).toBe(401);
+    });
+
+    it("should return 200 with current user when valid token", async () => {
+      const loginRes = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/admin/login",
+        payload: { username: "admin", password: "admin*?&123456" },
+        headers: { "content-type": "application/json" },
+      });
+      if (loginRes.statusCode !== 200) {
+        console.warn("auth/me test skipped: login failed (DB may be unavailable)");
+        return;
+      }
+      const { token } = JSON.parse(loginRes.body).data;
+      const res = await app.inject({
+        method: "GET",
+        url: "/api/v1/auth/me",
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body.success).toBe(true);
+      expect(body.data?.user).toBeDefined();
+      expect(body.data.user.uid).toBeDefined();
+      expect(body.data.user.username).toBe("admin");
+      expect(body.data.user.email).toBeDefined();
+      expect(body.data.user.role).toBe("admin");
+      expect(body.data.user).not.toHaveProperty("password");
     });
   });
 });

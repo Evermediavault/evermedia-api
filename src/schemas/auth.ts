@@ -16,6 +16,23 @@ export const LoginUserSchema = z.object({
   role: z.string(),
 });
 
+export type LoginUser = z.infer<typeof LoginUserSchema>;
+
+/** 将 Prisma 用户行转为 API 返回的 user 对象 */
+export function toAuthUser(row: {
+  uid: string;
+  username: string;
+  email: string;
+  role?: string | null;
+}): LoginUser {
+  return {
+    uid: row.uid,
+    username: row.username,
+    email: row.email,
+    role: row.role ?? "",
+  };
+}
+
 /** 登录成功响应 data */
 export const LoginResponseDataSchema = z.object({
   token: z.string(),

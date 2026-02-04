@@ -11,7 +11,7 @@ describe("Health Check Endpoints", () => {
   });
 
   afterAll(async () => {
-    await app.close();
+    if (app) await app.close();
   });
 
   describe("GET /api/v1/health", () => {

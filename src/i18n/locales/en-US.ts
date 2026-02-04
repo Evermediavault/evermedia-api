@@ -2,6 +2,11 @@
  * English (US) language pack
  */
 export default {
+  // App
+  app: {
+    welcome: "Welcome to {name}",
+  },
+
   // Common
   common: {
     confirm: "Confirm",
@@ -84,6 +89,9 @@ export default {
       start: "Starting database initialization...",
       tableCreated: "User table created successfully",
       tableCreateFailed: "Failed to create user table",
+      tableStructureMismatch: "User table exists but structure may not match, run prisma:migrate to sync",
+      ensureUserTableError: "Error ensuring user table exists",
+      checkTableError: "Error checking if table {table} exists",
       adminCreated: "Default admin account created successfully",
       adminExists: "Default admin account already exists, skipping creation",
       adminCreateFailed: "Failed to create default admin account",
@@ -99,6 +107,7 @@ export default {
 
   // Authentication related
   auth: {
+    loginBodyRequired: "Username and password are required",
     invalidCredentials: "Invalid username or password",
     tokenExpired: "Token expired",
     tokenInvalid: "Invalid token",
@@ -132,6 +141,14 @@ export default {
     uploadFailed: "Upload to storage failed",
     listFailed: "Failed to get file list",
     metadataNameValueRequired: "Metadata name and value must not be empty for each entry",
+  },
+
+  // Log (server-side)
+  log: {
+    apiException: "API exception",
+    dbError: "Database error",
+    dbConnectionError: "Database connection error",
+    unhandledError: "Unhandled error",
   },
 
   // Server related

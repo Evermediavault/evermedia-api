@@ -1,5 +1,6 @@
 import Fastify, { FastifyInstance } from "fastify";
 import compress from "@fastify/compress";
+import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
 import { settings, isProduction } from "./core/config.js";
 import { getLogger } from "./core/logger.js";
@@ -10,6 +11,7 @@ import { i18nPlugin } from "./i18n/middleware.js";
 import { loggingPlugin } from "./middleware/logging.js";
 import { errorHandler } from "./middleware/exception.js";
 import { apiV1Router } from "./api/v1/router.js";
+import { t } from "./i18n/index.js";
 
 const logger = getLogger("app");
 
@@ -19,24 +21,12 @@ const logger = getLogger("app");
  * @returns 配置好的 Fastify 应用实例
  */
 export const createApplication = async (): Promise<FastifyInstance> => {
-  // 创建 Fastify 实例
   const app = Fastify({
     logger: false,
     disableRequestLogging: true,
   });
 
-  // CORS：根 app 上直接 addHook，保证预检和所有响应都有头
-  app.addHook("onRequest", async (request, reply) => {
-    const origin = request.headers.origin || "*";
-    reply.header("Access-Control-Allow-Origin", origin);
-    reply.header("Access-Control-Allow-Credentials", "true");
-    reply.header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS,HEAD");
-    reply.header("Access-Control-Allow-Headers", "*");
-    if (request.method === "OPTIONS") {
-      return reply.status(204).send();
-    }
-  });
-
+  await app.register(cors, { origin: true, credentials: true });
   await app.register(compress, { threshold: 1000 });
   await app.register(multipart, {
     limits: {
@@ -63,8 +53,9 @@ export const createApplication = async (): Promise<FastifyInstance> => {
 
   // 根路径
   app.get("/", async () => {
+    const locale = settings.DEFAULT_LOCALE as "zh-CN" | "en-US";
     return {
-      message: `欢迎使用 ${settings.APP_NAME}`,
+      message: t("app.welcome", { name: settings.APP_NAME }, locale),
       version: settings.APP_VERSION,
       docs_url: isProduction() ? null : settings.API_DOCS_URL,
     };

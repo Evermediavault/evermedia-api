@@ -2,6 +2,11 @@
  * 中文（简体）语言包
  */
 export default {
+  // 应用
+  app: {
+    welcome: "欢迎使用 {name}",
+  },
+
   // 通用
   common: {
     confirm: "确认",
@@ -84,6 +89,9 @@ export default {
       start: "开始初始化数据库...",
       tableCreated: "用户表创建成功",
       tableCreateFailed: "创建用户表失败",
+      tableStructureMismatch: "用户表存在但结构可能不匹配，请运行 prisma:migrate 同步表结构",
+      ensureUserTableError: "确保用户表存在时出错",
+      checkTableError: "检查表 {table} 是否存在时出错",
       adminCreated: "默认管理员账户创建成功",
       adminExists: "默认管理员账户已存在，跳过创建",
       adminCreateFailed: "创建默认管理员账户失败",
@@ -99,6 +107,7 @@ export default {
 
   // 认证相关
   auth: {
+    loginBodyRequired: "用户名和密码为必填",
     invalidCredentials: "用户名或密码错误",
     tokenExpired: "令牌已过期",
     tokenInvalid: "令牌无效",
@@ -132,6 +141,14 @@ export default {
     uploadFailed: "上传到存储失败",
     listFailed: "获取文件列表失败",
     metadataNameValueRequired: "元数据每条目的名称与值均不能为空",
+  },
+
+  // 日志（服务端）
+  log: {
+    apiException: "API 异常",
+    dbError: "数据库异常",
+    dbConnectionError: "数据库连接异常",
+    unhandledError: "未处理的异常",
   },
 
   // 服务器相关

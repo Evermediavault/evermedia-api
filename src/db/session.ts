@@ -1,26 +1,12 @@
 import { FastifyPluginAsync } from "fastify";
-import { PrismaClient } from "@prisma/client";
 import { getPrismaClient } from "./client.js";
 
 /**
- * 扩展 Fastify 类型定义，添加数据库客户端
- */
-declare module "fastify" {
-  interface FastifyInstance {
-    db: PrismaClient;
-  }
-}
-
-/**
- * 数据库会话插件
- *
- * 为 Fastify 应用提供数据库客户端
+ * 数据库插件：确保 Prisma 单例在应用生命周期内可用，关闭时断开连接。
+ * 业务层通过 getDb()（api/deps）获取客户端，不通过 fastify.decorate。
  */
 export const dbPlugin: FastifyPluginAsync = async (fastify) => {
   const prisma = getPrismaClient();
-
-  fastify.decorate("db", prisma);
-
   fastify.addHook("onClose", async () => {
     await prisma.$disconnect();
   });

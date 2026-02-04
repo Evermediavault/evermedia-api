@@ -8,6 +8,7 @@ import {
 } from "../core/exceptions.js";
 import { createErrorResponse } from "../schemas/response.js";
 import { getMsg } from "../i18n/utils.js";
+import { toErrorMessage } from "../utils/helpers.js";
 
 const logger = getLogger("exception");
 
@@ -35,7 +36,7 @@ export const errorHandler = (
   // 处理自定义 API 异常
   if (error instanceof BaseAPIException) {
     logger.warn({
-      message: "API异常",
+      message: getMsg(request, "log.apiException", "API exception"),
       errorMessage: error.message,
       statusCode: error.statusCode,
       detail: error.detail,
@@ -56,7 +57,7 @@ export const errorHandler = (
   // 处理 Prisma 数据库异常
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     logger.error({
-      message: "数据库异常",
+      message: getMsg(request, "log.dbError", "Database error"),
       error: error.message,
       code: error.code,
       meta: error.meta,
@@ -83,7 +84,7 @@ export const errorHandler = (
   // 处理 Prisma 客户端初始化错误
   if (error instanceof Prisma.PrismaClientInitializationError) {
     logger.error({
-      message: "数据库连接异常",
+      message: getMsg(request, "log.dbConnectionError", "Database connection error"),
       error: error.message,
       path: request.url,
       method: request.method,
@@ -102,12 +103,12 @@ export const errorHandler = (
     return;
   }
 
-  // 处理其他未预期的异常
+  const errMsg = toErrorMessage(error);
   logger.error({
-    message: "未处理的异常",
-    error: error.message,
-    errorType: error.constructor.name,
-    stack: error.stack,
+    message: getMsg(request, "log.unhandledError", "Unhandled error"),
+    error: errMsg,
+    errorType: error instanceof Error ? error.constructor.name : "Unknown",
+    stack: error instanceof Error ? error.stack : undefined,
     path: request.url,
     method: request.method,
   });
@@ -118,7 +119,7 @@ export const errorHandler = (
   const errorResponse = createErrorResponse(
     message,
     internalError.statusCode,
-    process.env.DEBUG === "true" ? error.message : undefined
+    process.env.DEBUG === "true" ? errMsg : undefined
   );
 
   reply.status(internalError.statusCode).send(errorResponse);

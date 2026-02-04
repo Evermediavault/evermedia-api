@@ -10,9 +10,8 @@ const logger = getLogger("db.init");
 /**
  * 检查表是否存在
  */
-async function tableExists(prisma: PrismaClient, tableName: string): Promise<boolean> {
+async function tableExists(prisma: PrismaClient, tableName: string, locale: Locale = "zh-CN"): Promise<boolean> {
   try {
-    // 使用原始 SQL 查询检查表是否存在
     const result = await prisma.$queryRaw<Array<{ count: bigint }>>`
       SELECT COUNT(*) as count
       FROM information_schema.tables
@@ -22,7 +21,7 @@ async function tableExists(prisma: PrismaClient, tableName: string): Promise<boo
     return result[0]?.count > 0;
   } catch (error) {
     logger.error({
-      message: `检查表 ${tableName} 是否存在时出错`,
+      message: t("db.init.checkTableError", { table: tableName }, locale),
       error: error instanceof Error ? error.message : String(error),
     });
     return false;
@@ -88,7 +87,7 @@ async function createUserTable(prisma: PrismaClient, locale: Locale = "zh-CN"): 
 async function ensureUserTable(prisma: PrismaClient, locale: Locale = "zh-CN"): Promise<boolean> {
   try {
     // 检查表是否存在
-    const exists = await tableExists(prisma, "users");
+    const exists = await tableExists(prisma, "users", locale);
     
     if (!exists) {
       // 表不存在，创建表
@@ -102,14 +101,14 @@ async function ensureUserTable(prisma: PrismaClient, locale: Locale = "zh-CN"): 
       return true;
     } catch (error) {
       logger.warn({
-        message: "用户表存在但结构可能不匹配，请运行 'npm run prisma:migrate' 同步表结构",
+        message: t("db.init.tableStructureMismatch", undefined, locale),
         error: error instanceof Error ? error.message : String(error),
       });
       return false;
     }
   } catch (error) {
     logger.error({
-      message: "确保用户表存在时出错",
+      message: t("db.init.ensureUserTableError", undefined, locale),
       error: error instanceof Error ? error.message : String(error),
     });
     return false;
@@ -195,7 +194,6 @@ export async function initializeDatabase(): Promise<void> {
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
     });
-    // 不抛出错误，允许应用继续启动
-    // 这样即使数据库初始化失败，应用仍然可以启动（可能用于健康检查等）
+    throw error;
   }
 }

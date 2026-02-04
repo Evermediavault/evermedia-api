@@ -63,7 +63,7 @@ export const requireLogin = requireAuth;
 
 /**
  * 必须具有指定角色之一（PreHandler）
- * 依赖上一步的 request.user，不验证 token。须在 authToken + requireAuth 之后使用。
+ * 须在 authToken + requireAuth 之后使用；仅做角色判断，不重复校验 request.user。
  */
 export function requireRoles(roles: string[]) {
   const set = new Set(roles.map((r) => r.toLowerCase()));
@@ -72,14 +72,7 @@ export function requireRoles(roles: string[]) {
     request: FastifyRequest,
     reply: FastifyReply
   ): Promise<void> {
-    if (!request.user) {
-      const err = new UnauthorizedError("Login required");
-      return reply.status(err.statusCode).send(
-        createErrorResponse(getMsg(request, "auth.loginRequired", err.message), err.statusCode)
-      );
-    }
-
-    const role = (request.user.role ?? "").toLowerCase();
+    const role = (request.user!.role ?? "").toLowerCase();
     if (!set.has(role)) {
       const err = new ForbiddenError("Insufficient permissions");
       return reply.status(err.statusCode).send(

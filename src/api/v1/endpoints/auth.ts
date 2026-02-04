@@ -1,10 +1,12 @@
 import { FastifyPluginAsync } from "fastify";
 import { getDb } from "../../deps.js";
 import { verifyPassword } from "../../../core/security.js";
-import { createSuccessResponse, createErrorResponse } from "../../../schemas/response.js";
+import { createSuccessResponse } from "../../../schemas/response.js";
 import { getMsg } from "../../../i18n/utils.js";
-import { LoginBodySchema } from "../../../schemas/auth.js";
+import { LoginBodySchema, toAuthUser } from "../../../schemas/auth.js";
 import { sign, payloadFromUser } from "../../../utils/jwt.js";
+import { authToken, requireAuth } from "../../../middleware/auth.js";
+import { UnauthorizedError, ForbiddenError, BadRequestError } from "../../../core/exceptions.js";
 
 const ADMIN_ROLE = "admin";
 
@@ -13,18 +15,45 @@ const ADMIN_ROLE = "admin";
  */
 export const authRouter: FastifyPluginAsync = async (fastify) => {
   /**
+   * 获取当前登录用户信息（必须登录）
+   * GET /auth/me
+   */
+  fastify.get<{}>(
+    "/me",
+    { preHandler: [authToken, requireAuth] },
+    async (request, reply) => {
+      const uid = request.user?.sub;
+      if (!uid) {
+        throw new UnauthorizedError(getMsg(request, "auth.loginRequired", "Please login first"));
+      }
+      const prisma = getDb();
+      const user = await prisma.user.findUnique({
+        where: { uid },
+        select: { uid: true, username: true, email: true, role: true },
+      });
+      if (!user) {
+        throw new UnauthorizedError(getMsg(request, "auth.userNotFound", "User not found"));
+      }
+      return reply.status(200).send(
+        createSuccessResponse(getMsg(request, "success.list", "Retrieved successfully"), {
+          user: toAuthUser(user),
+        })
+      );
+    }
+  );
+
+  /**
    * 管理员登录
    * POST /auth/admin/login
-   * Body: { username, password }
-   * 成功：返回 token 与用户信息（仅管理员可登录此接口）
    */
   fastify.post<{
     Body: { username?: string; password?: string };
   }>("/admin/login", async (request, reply) => {
     const parsed = LoginBodySchema.safeParse(request.body);
     if (!parsed.success) {
-      const msg = getMsg(request, "validation.required", "Username and password are required");
-      return reply.status(400).send(createErrorResponse(msg, 400));
+      throw new BadRequestError(
+        getMsg(request, "auth.loginBodyRequired", "Username and password are required")
+      );
     }
     const { username, password } = parsed.data;
 
@@ -34,19 +63,16 @@ export const authRouter: FastifyPluginAsync = async (fastify) => {
     });
 
     if (!user) {
-      const msg = getMsg(request, "auth.invalidCredentials", "Invalid username or password");
-      return reply.status(401).send(createErrorResponse(msg, 401));
+      throw new UnauthorizedError(getMsg(request, "auth.invalidCredentials", "Invalid username or password"));
     }
 
     const ok = await verifyPassword(password, user.password);
     if (!ok) {
-      const msg = getMsg(request, "auth.invalidCredentials", "Invalid username or password");
-      return reply.status(401).send(createErrorResponse(msg, 401));
+      throw new UnauthorizedError(getMsg(request, "auth.invalidCredentials", "Invalid username or password"));
     }
 
     if ((user.role ?? "").toLowerCase() !== ADMIN_ROLE) {
-      const msg = getMsg(request, "auth.permissionDenied", "Admin role required");
-      return reply.status(403).send(createErrorResponse(msg, 403));
+      throw new ForbiddenError(getMsg(request, "auth.permissionDenied", "Admin role required"));
     }
 
     const ip = request.ip ?? null;
@@ -67,12 +93,7 @@ export const authRouter: FastifyPluginAsync = async (fastify) => {
     return reply.status(200).send(
       createSuccessResponse(getMsg(request, "success.login", "Login successful"), {
         token,
-        user: {
-          uid: user.uid,
-          username: user.username,
-          email: user.email,
-          role: user.role,
-        },
+        user: toAuthUser(user),
       })
     );
   });

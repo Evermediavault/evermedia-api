@@ -1,23 +1,23 @@
 /**
  * 媒体路由
- * GET  /media/list：获取文件列表（不鉴权，仅返回 permission=public 且未删除）
- * POST /media/upload：上传（仅管理员），multipart/form-data，字段 file，可选 metadata（JSON 字符串）
+ * GET  /media/list：获取文件列表（不鉴权）
+ * POST /media/upload：上传（仅管理员），multipart，字段 file，可选 metadata
  */
 import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from "fastify";
 import { getDb } from "../../deps.js";
 import { getSynapse } from "../../../synapse/index.js";
 import { authToken, requireAuth, requireAdmin } from "../../../middleware/auth.js";
-import { createErrorResponse, createSuccessResponse, createPaginatedResponse, createPaginationMeta } from "../../../schemas/response.js";
+import { createSuccessResponse, createPaginatedResponse, createPaginationMeta } from "../../../schemas/response.js";
 import type { UploadFileItem } from "../../../schemas/media.js";
+import { MediaListQuerySchema } from "../../../schemas/media.js";
 import { getMsg } from "../../../i18n/utils.js";
-import { parseMultipartMetadata } from "../../../utils/multipart.js";
-import { settings, isDevelopment } from "../../../core/config.js";
+import { parseMultipartMetadata, normalizeMetadataGroups } from "../../../utils/multipart.js";
+import { toErrorMessage } from "../../../utils/helpers.js";
+import { settings } from "../../../core/config.js";
 import { getLogger } from "../../../core/logger.js";
+import { BaseAPIException, UnauthorizedError, BadRequestError } from "../../../core/exceptions.js";
 
 const log = getLogger("media");
-
-const DEFAULT_PAGE_SIZE = 20;
-const MAX_PAGE_SIZE = 100;
 
 function isAllowedMime(mime: string): boolean {
   const allowed = settings.UPLOAD_ALLOWED_FILE_TYPES;
@@ -34,45 +34,37 @@ export const mediaRouter: FastifyPluginAsync = async (fastify) => {
   fastify.get<{
     Querystring: { page?: string; page_size?: string };
   }>("/list", async (request, reply) => {
-    try {
-      const page = Math.max(1, parseInt(request.query.page ?? "1", 10) || 1);
-      const pageSize = Math.min(
-        MAX_PAGE_SIZE,
-        Math.max(1, parseInt(request.query.page_size ?? String(DEFAULT_PAGE_SIZE), 10) || DEFAULT_PAGE_SIZE)
-      );
-      const prisma = getDb();
-      const [list, total] = await Promise.all([
-        prisma.file.findMany({
-          where: { deleted_at: null, permission: "public" },
-          orderBy: { uploaded_at: "desc" },
-          skip: (page - 1) * pageSize,
-          take: pageSize,
-          select: {
-            id: true,
-            name: true,
-            file_type: true,
-            synapse_index_id: true,
-            uploaded_at: true,
-          },
-        }),
-        prisma.file.count({ where: { deleted_at: null, permission: "public" } }),
-      ]);
-      const data: UploadFileItem[] = list.map((f) => ({
-        id: f.id,
-        name: f.name,
-        file_type: f.file_type,
-        synapse_index_id: f.synapse_index_id,
-        uploaded_at: f.uploaded_at.toISOString(),
-      }));
-      const message = getMsg(request, "success.list", "Retrieved successfully");
-      return reply.send(createPaginatedResponse(message, data, createPaginationMeta(page, pageSize, total)));
-    } catch (err) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      log.error({ err, message: errMsg }, "File list handler error");
-      const msg = getMsg(request, "media.listFailed", "Failed to get file list");
-      const detail = isDevelopment() ? { reason: errMsg } : undefined;
-      return reply.status(500).send(createErrorResponse(msg, 500, detail));
+    const parsed = MediaListQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      throw new BadRequestError(getMsg(request, "validation.invalidParams", "Invalid query parameters"));
     }
+    const { page, page_size: pageSize } = parsed.data;
+    const prisma = getDb();
+    const [list, total] = await Promise.all([
+      prisma.file.findMany({
+        where: { deleted_at: null, permission: "public" },
+        orderBy: { uploaded_at: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        select: {
+          id: true,
+          name: true,
+          file_type: true,
+          synapse_index_id: true,
+          uploaded_at: true,
+        },
+      }),
+      prisma.file.count({ where: { deleted_at: null, permission: "public" } }),
+    ]);
+    const data: UploadFileItem[] = list.map((f) => ({
+      id: f.id,
+      name: f.name,
+      file_type: f.file_type,
+      synapse_index_id: f.synapse_index_id,
+      uploaded_at: f.uploaded_at.toISOString(),
+    }));
+    const message = getMsg(request, "success.list", "Retrieved successfully");
+    return reply.send(createPaginatedResponse(message, data, createPaginationMeta(page, pageSize, total)));
   });
 
   /**
@@ -84,17 +76,7 @@ export const mediaRouter: FastifyPluginAsync = async (fastify) => {
   }>(
     "/upload",
     { preHandler: [authToken, requireAuth, requireAdmin] },
-    async (request, reply) => {
-      try {
-        return await doUpload(request, reply);
-      } catch (err) {
-        const errMsg = err instanceof Error ? err.message : String(err);
-        log.error({ err, message: errMsg }, "Upload handler error");
-        const msg = getMsg(request, "media.uploadFailed", "Upload to storage failed");
-        const detail = isDevelopment() ? { reason: errMsg } : undefined;
-        return reply.status(502).send(createErrorResponse(msg, 502, detail));
-      }
-    }
+    async (request, reply) => doUpload(request, reply)
   );
 };
 
@@ -103,8 +85,10 @@ async function doUpload(request: FastifyRequest, reply: FastifyReply) {
 
   const synapse = await getSynapse();
   if (!synapse) {
-    const msg = getMsg(request, "media.storageUnavailable", "Storage service unavailable");
-    return reply.status(503).send(createErrorResponse(msg, 503));
+    throw new BaseAPIException(
+      getMsg(request, "media.storageUnavailable", "Storage service unavailable"),
+      503
+    );
   }
 
   let buffer: Buffer;
@@ -115,61 +99,32 @@ async function doUpload(request: FastifyRequest, reply: FastifyReply) {
   try {
     const data = await request.file();
     if (!data) {
-      const msg = getMsg(request, "media.fileRequired", "Missing file field");
-      return reply.status(400).send(createErrorResponse(msg, 400));
+      throw new BadRequestError(getMsg(request, "media.fileRequired", "Missing file field"));
     }
 
-    metadata = parseMultipartMetadata(data.fields as Record<string, unknown> | undefined);
-
-    const groups = metadata.groups;
-    if (Array.isArray(groups)) {
-      const invalid = groups.some(
-        (item) =>
-          !item ||
-          typeof item !== "object" ||
-          !(typeof (item as Record<string, unknown>).name === "string" && String((item as Record<string, unknown>).name).trim()) ||
-          !(typeof (item as Record<string, unknown>).value === "string" && String((item as Record<string, unknown>).value).trim())
+    const rawMetadata = parseMultipartMetadata(data.fields as Record<string, unknown> | undefined);
+    try {
+      const normalized = normalizeMetadataGroups(rawMetadata);
+      metadata = normalized.groups.length > 0 ? { groups: normalized.groups } : {};
+    } catch {
+      throw new BadRequestError(
+        getMsg(request, "media.metadataNameValueRequired", "Metadata name and value must not be empty for each entry")
       );
-      if (invalid) {
-        const msg = getMsg(request, "media.metadataNameValueRequired", "Metadata name and value must not be empty for each entry");
-        return reply.status(400).send(createErrorResponse(msg, 400));
-      }
-      // 只持久化名称与值均非空的条目，与前端 buildMetadataPayload 一致
-      const normalized = groups
-        .filter(
-          (item): item is Record<string, unknown> =>
-            item != null &&
-            typeof item === "object" &&
-            typeof (item as Record<string, unknown>).name === "string" &&
-            typeof (item as Record<string, unknown>).value === "string" &&
-            String((item as Record<string, unknown>).name).trim() !== "" &&
-            String((item as Record<string, unknown>).value).trim() !== ""
-        )
-        .map((item) => ({
-          name: String((item as Record<string, unknown>).name).trim(),
-          type: (item as Record<string, unknown>).type ?? "input",
-          value: String((item as Record<string, unknown>).value).trim(),
-        }));
-      metadata = { groups: normalized };
     }
 
     filename = data.filename ?? "unknown";
     mimeType = (data.mimetype ?? "application/octet-stream").trim();
     if (!isAllowedMime(mimeType)) {
-      const msg = getMsg(request, "media.fileTypeNotAllowed", "File type not allowed");
-      return reply.status(400).send(createErrorResponse(msg, 400));
+      throw new BadRequestError(getMsg(request, "media.fileTypeNotAllowed", "File type not allowed"));
     }
 
     buffer = await data.toBuffer();
   } catch (err) {
     const isSize = err && typeof err === "object" && "code" in err && err.code === "FST_REQ_FILE_TOO_LARGE";
     if (isSize) {
-      const msg = getMsg(
-        request,
-        "media.fileTooLarge",
-        `File too large (max ${settings.UPLOAD_MAX_FILE_SIZE_KB}KB)`
+      throw new BadRequestError(
+        getMsg(request, "media.fileTooLarge", `File too large (max ${settings.UPLOAD_MAX_FILE_SIZE_KB}KB)`)
       );
-      return reply.status(400).send(createErrorResponse(msg, 400));
     }
     throw err;
   }
@@ -180,10 +135,9 @@ async function doUpload(request: FastifyRequest, reply: FastifyReply) {
     select: { id: true },
   });
   if (!user) {
-    return reply
-      .status(401)
-      .send(createErrorResponse(getMsg(request, "auth.userNotFound", "User not found"), 401));
+    throw new UnauthorizedError(getMsg(request, "auth.userNotFound", "User not found"));
   }
+
   let synapseIndexId: string;
   try {
     const context = await synapse.storage.createContext({
@@ -192,22 +146,15 @@ async function doUpload(request: FastifyRequest, reply: FastifyReply) {
     const result = await context.upload(new Uint8Array(buffer), { metadata: {} });
     synapseIndexId = typeof result.pieceCid === "string" ? result.pieceCid : String(result.pieceCid);
   } catch (err) {
-    const errMsg = err instanceof Error ? err.message : String(err);
+    const errMsg = toErrorMessage(err);
     const causeMsg = err instanceof Error && err.cause instanceof Error ? err.cause.message : null;
     log.error(
-      {
-        message: "Synapse upload failed",
-        err,
-        reason: errMsg,
-        cause: causeMsg,
-        filename,
-        size: buffer.length,
-      },
+      { err, message: "Synapse upload failed", reason: errMsg, cause: causeMsg, filename, size: buffer.length },
       "Synapse upload failed"
     );
     const msg = getMsg(request, "media.uploadFailed", "Upload to storage failed");
-    const detail = isDevelopment() ? { reason: errMsg, cause: causeMsg ?? undefined } : undefined;
-    return reply.status(502).send(createErrorResponse(msg, 502, detail));
+    const detail = { reason: errMsg, cause: causeMsg ?? undefined };
+    throw new BaseAPIException(msg, 502, detail);
   }
 
   const file = await prisma.file.create({
