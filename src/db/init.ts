@@ -61,6 +61,7 @@ async function createUserTable(prisma: PrismaClient, locale: Locale = "zh-CN"): 
         email VARCHAR(255) NOT NULL UNIQUE,
         password VARCHAR(255) NOT NULL,
         role VARCHAR(50) NOT NULL DEFAULT 'user',
+        disabled TINYINT(1) NOT NULL DEFAULT 0,
         last_login_at DATETIME(3) NULL,
         last_login_ip VARCHAR(45) NULL,
         created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),

@@ -20,6 +20,7 @@ model User {
   email         String    @unique @db.VarChar(255)
   password      String    @db.VarChar(255)
   role          String    @default("user") @db.VarChar(50)
+  disabled      Boolean   @default(false)
   last_login_at DateTime?
   last_login_ip String?   @db.VarChar(45)
   created_at    DateTime  @default(now())

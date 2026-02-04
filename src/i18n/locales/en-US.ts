@@ -107,7 +107,7 @@ export default {
 
   // Authentication related
   auth: {
-    loginBodyRequired: "Username and password are required",
+    loginBodyRequired: "Username or email and password are required",
     invalidCredentials: "Invalid username or password",
     tokenExpired: "Token expired",
     tokenInvalid: "Invalid token",
@@ -115,6 +115,7 @@ export default {
     passwordIncorrect: "Incorrect password",
     userNotFound: "User not found",
     userExists: "User already exists",
+    userDisabled: "Account is disabled",
     loginRequired: "Please login first",
     permissionDenied: "Permission denied",
   },
@@ -127,7 +128,9 @@ export default {
     updated: "User updated successfully",
     deleted: "User deleted successfully",
     usernameRequired: "Username is required",
+    usernameExists: "Username already exists",
     emailRequired: "Email is required",
+    emailExists: "Email already in use",
     passwordRequired: "Password is required",
     emailInvalid: "Invalid email format",
   },

@@ -8,7 +8,8 @@ import { sign, payloadFromUser } from "../../../utils/jwt.js";
 import { authToken, requireAuth } from "../../../middleware/auth.js";
 import { UnauthorizedError, ForbiddenError, BadRequestError } from "../../../core/exceptions.js";
 
-const ADMIN_ROLE = "admin";
+/** 允许登录后台的角色（admin、uploader） */
+const ALLOWED_LOGIN_ROLES = ["admin", "uploader"] as const;
 
 /**
  * 登录相关路由
@@ -29,10 +30,13 @@ export const authRouter: FastifyPluginAsync = async (fastify) => {
       const prisma = getDb();
       const user = await prisma.user.findUnique({
         where: { uid },
-        select: { uid: true, username: true, email: true, role: true },
+        select: { uid: true, username: true, email: true, role: true, disabled: true },
       });
       if (!user) {
         throw new UnauthorizedError(getMsg(request, "auth.userNotFound", "User not found"));
+      }
+      if (user.disabled) {
+        throw new ForbiddenError(getMsg(request, "auth.userDisabled", "Account is disabled"));
       }
       return reply.status(200).send(
         createSuccessResponse(getMsg(request, "success.list", "Retrieved successfully"), {
@@ -43,7 +47,7 @@ export const authRouter: FastifyPluginAsync = async (fastify) => {
   );
 
   /**
-   * 管理员登录
+   * 后台登录（admin、uploader 可登录）
    * POST /auth/admin/login
    */
   fastify.post<{
@@ -56,14 +60,21 @@ export const authRouter: FastifyPluginAsync = async (fastify) => {
       );
     }
     const { username, password } = parsed.data;
+    const account = username.trim();
 
     const prisma = getDb();
-    const user = await prisma.user.findUnique({
-      where: { username },
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [{ username: account }, { email: account.toLowerCase() }],
+      },
     });
 
     if (!user) {
       throw new UnauthorizedError(getMsg(request, "auth.invalidCredentials", "Invalid username or password"));
+    }
+
+    if (user.disabled) {
+      throw new ForbiddenError(getMsg(request, "auth.userDisabled", "Account is disabled"));
     }
 
     const ok = await verifyPassword(password, user.password);
@@ -71,8 +82,9 @@ export const authRouter: FastifyPluginAsync = async (fastify) => {
       throw new UnauthorizedError(getMsg(request, "auth.invalidCredentials", "Invalid username or password"));
     }
 
-    if ((user.role ?? "").toLowerCase() !== ADMIN_ROLE) {
-      throw new ForbiddenError(getMsg(request, "auth.permissionDenied", "Admin role required"));
+    const role = (user.role ?? "").toLowerCase();
+    if (!ALLOWED_LOGIN_ROLES.includes(role as (typeof ALLOWED_LOGIN_ROLES)[number])) {
+      throw new ForbiddenError(getMsg(request, "auth.permissionDenied", "Permission denied"));
     }
 
     const ip = request.ip ?? null;

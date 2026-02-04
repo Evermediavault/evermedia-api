@@ -107,7 +107,7 @@ export default {
 
   // 认证相关
   auth: {
-    loginBodyRequired: "用户名和密码为必填",
+    loginBodyRequired: "用户名或邮箱和密码为必填",
     invalidCredentials: "用户名或密码错误",
     tokenExpired: "令牌已过期",
     tokenInvalid: "令牌无效",
@@ -115,6 +115,7 @@ export default {
     passwordIncorrect: "密码错误",
     userNotFound: "用户不存在",
     userExists: "用户已存在",
+    userDisabled: "账号已禁用",
     loginRequired: "请先登录",
     permissionDenied: "权限不足",
   },
@@ -127,7 +128,9 @@ export default {
     updated: "用户更新成功",
     deleted: "用户删除成功",
     usernameRequired: "用户名不能为空",
+    usernameExists: "用户名已存在",
     emailRequired: "邮箱不能为空",
+    emailExists: "邮箱已被使用",
     passwordRequired: "密码不能为空",
     emailInvalid: "邮箱格式不正确",
   },
