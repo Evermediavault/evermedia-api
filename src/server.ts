@@ -3,13 +3,16 @@ import { createApplication } from "./app.js";
 import { settings, getDatabaseUrl } from "./core/config.js";
 import { getLogger } from "./core/logger.js";
 import { disconnectPrisma } from "./db/client.js";
+import { toErrorMessage } from "./utils/helpers.js";
+import { t, type Locale } from "./i18n/index.js";
 
 const logger = getLogger("server");
+const logLocale = (): Locale => settings.DEFAULT_LOCALE as Locale;
 
 // 确保 DATABASE_URL 环境变量已设置
 if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL = getDatabaseUrl();
-  logger.info({ message: "使用配置构建的 DATABASE_URL" });
+  logger.info({ message: t("log.server.builtDatabaseUrl", undefined, logLocale()) });
 }
 
 let app: FastifyInstance | null = null;
@@ -27,14 +30,14 @@ const start = async () => {
     });
 
     logger.info({
-      message: "服务器启动成功",
+      message: t("log.server.started", undefined, logLocale()),
       url: `http://${settings.HOST}:${settings.PORT}`,
       environment: settings.ENVIRONMENT,
     });
   } catch (error) {
     logger.error({
-      message: "服务器启动失败",
-      error: error instanceof Error ? error.message : String(error),
+      message: t("log.server.startFailed", undefined, logLocale()),
+      error: toErrorMessage(error),
     });
     await disconnectPrisma();
     process.exit(1);
@@ -46,17 +49,16 @@ const shutdown = async (): Promise<void> => {
     await app.close();
     app = null;
   }
-  await disconnectPrisma();
 };
 
 process.on("SIGINT", async () => {
-  logger.info({ message: "收到 SIGINT 信号，正在关闭服务器..." });
+  logger.info({ message: t("log.server.sigint", undefined, logLocale()) });
   await shutdown();
   process.exit(0);
 });
 
 process.on("SIGTERM", async () => {
-  logger.info({ message: "收到 SIGTERM 信号，正在关闭服务器..." });
+  logger.info({ message: t("log.server.sigterm", undefined, logLocale()) });
   await shutdown();
   process.exit(0);
 });

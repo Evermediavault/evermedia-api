@@ -34,6 +34,7 @@ export default {
   validation: {
     required: "此字段为必填项",
     invalidParams: "请求参数无效",
+    passwordRequiredWhenCreate: "创建用户时密码为必填",
     email: "请输入有效的邮箱地址",
     url: "请输入有效的URL地址",
     password: "密码至少8位，包含大小写字母、数字和特殊字符",
@@ -74,6 +75,7 @@ export default {
 
   // 成功提示
   success: {
+    get: "获取成功",
     list: "获取成功",
     saved: "保存成功",
     deleted: "删除成功",
@@ -138,6 +140,7 @@ export default {
   // 上传/媒体
   media: {
     fileRequired: "请选择要上传的文件",
+    fileCountExceeded: "单次最多上传 {max} 个文件",
     fileTypeNotAllowed: "不允许该文件类型",
     fileTooLarge: "文件过大（最大 {max}KB）",
     storageUnavailable: "存储服务暂不可用",
@@ -154,6 +157,27 @@ export default {
     dbError: "数据库异常",
     dbConnectionError: "数据库连接异常",
     unhandledError: "未处理的异常",
+    app: {
+      start: "应用启动",
+      close: "应用关闭",
+    },
+    server: {
+      builtDatabaseUrl: "使用配置构建的 DATABASE_URL",
+      started: "服务器启动成功",
+      startFailed: "服务器启动失败",
+      sigint: "收到 SIGINT 信号，正在关闭服务器...",
+      sigterm: "收到 SIGTERM 信号，正在关闭服务器...",
+    },
+    request: {
+      start: "请求开始",
+      complete: "请求完成",
+      failed: "请求失败",
+    },
+    synapse: {
+      initialized: "Synapse 客户端已初始化",
+      initFailed: "Synapse 初始化失败",
+      disconnected: "Synapse 客户端已断开",
+    },
   },
 
   // 服务器相关

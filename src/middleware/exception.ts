@@ -1,6 +1,7 @@
 import { FastifyError, FastifyReply, FastifyRequest } from "fastify";
 import { Prisma } from "@prisma/client";
 import { getLogger } from "../core/logger.js";
+import { settings, isProduction } from "../core/config.js";
 import {
   BaseAPIException,
   DatabaseError,
@@ -9,6 +10,11 @@ import {
 import { createErrorResponse } from "../schemas/response.js";
 import { getMsg } from "../i18n/utils.js";
 import { toErrorMessage } from "../utils/helpers.js";
+
+/** 仅开发/测试环境且在 DEBUG 时在响应 detail 中暴露内部错误信息 */
+function allowDetailInResponse(): boolean {
+  return settings.DEBUG && !isProduction();
+}
 
 const logger = getLogger("exception");
 
@@ -59,7 +65,7 @@ export const errorHandler = (
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     logger.error({
       message: getMsg(request, "log.dbError"),
-      error: error.message,
+      error: toErrorMessage(error),
       code: error.code,
       meta: error.meta,
       path: request.url,
@@ -75,7 +81,7 @@ export const errorHandler = (
     const errorResponse = createErrorResponse(
       message,
       dbError.statusCode,
-      process.env.DEBUG === "true" ? error.message : undefined
+      allowDetailInResponse() ? toErrorMessage(error) : undefined
     );
 
     reply.status(dbError.statusCode).send(errorResponse);
@@ -86,7 +92,7 @@ export const errorHandler = (
   if (error instanceof Prisma.PrismaClientInitializationError) {
     logger.error({
       message: getMsg(request, "log.dbConnectionError"),
-      error: error.message,
+      error: toErrorMessage(error),
       path: request.url,
       method: request.method,
     });
@@ -97,7 +103,7 @@ export const errorHandler = (
     const errorResponse = createErrorResponse(
       message,
       dbError.statusCode,
-      process.env.DEBUG === "true" ? error.message : undefined
+      allowDetailInResponse() ? toErrorMessage(error) : undefined
     );
 
     reply.status(dbError.statusCode).send(errorResponse);
@@ -120,7 +126,7 @@ export const errorHandler = (
   const errorResponse = createErrorResponse(
     message,
     internalError.statusCode,
-    process.env.DEBUG === "true" ? errMsg : undefined
+    allowDetailInResponse() ? errMsg : undefined
   );
 
   reply.status(internalError.statusCode).send(errorResponse);

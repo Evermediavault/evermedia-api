@@ -1,8 +1,9 @@
 import { FastifyPluginAsync, FastifyReply } from "fastify";
-import { getDb } from "../../deps.js";
+import { getPrismaClient } from "../../../db/client.js";
 import { settings, isProduction } from "../../../core/config.js";
 import { createSuccessResponse, createErrorResponse } from "../../../schemas/response.js";
 import { getMsg } from "../../../i18n/utils.js";
+import { toErrorMessage } from "../../../utils/helpers.js";
 
 /**
  * 健康检查路由插件
@@ -42,7 +43,7 @@ export const healthRouter: FastifyPluginAsync = async (fastify) => {
    */
   fastify.get("/health/ready", async (request, reply: FastifyReply) => {
     try {
-      const db = getDb();
+      const db = getPrismaClient();
       await db.$queryRaw`SELECT 1`;
 
       const msg = getMsg(request, "health.ready");
@@ -52,7 +53,7 @@ export const healthRouter: FastifyPluginAsync = async (fastify) => {
         database: "connected",
       });
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage = toErrorMessage(error);
       const msg = getMsg(request, "health.notReady");
       const detail: { status: string; timestamp: string; database: string; error?: string } = {
         status: "not_ready",

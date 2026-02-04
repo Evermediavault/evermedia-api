@@ -1,5 +1,5 @@
 import { FastifyPluginAsync } from "fastify";
-import { getDb } from "../../deps.js";
+import { getPrismaClient } from "../../../db/client.js";
 import { verifyPassword } from "../../../core/security.js";
 import { createSuccessResponse } from "../../../schemas/response.js";
 import { getMsg } from "../../../i18n/utils.js";
@@ -27,7 +27,7 @@ export const authRouter: FastifyPluginAsync = async (fastify) => {
       if (!uid) {
         throw new UnauthorizedError("auth.loginRequired");
       }
-      const prisma = getDb();
+      const prisma = getPrismaClient();
       const user = await prisma.user.findUnique({
         where: { uid },
         select: { uid: true, username: true, email: true, role: true, disabled: true },
@@ -39,7 +39,7 @@ export const authRouter: FastifyPluginAsync = async (fastify) => {
         throw new ForbiddenError("auth.userDisabled");
       }
       return reply.status(200).send(
-        createSuccessResponse(getMsg(request, "success.list"), {
+        createSuccessResponse(getMsg(request, "success.get"), {
           user: toAuthUser(user),
         })
       );
@@ -60,7 +60,7 @@ export const authRouter: FastifyPluginAsync = async (fastify) => {
     const { username, password } = parsed.data;
     const account = username.trim();
 
-    const prisma = getDb();
+    const prisma = getPrismaClient();
     const user = await prisma.user.findFirst({
       where: {
         OR: [{ username: account }, { email: account.toLowerCase() }],

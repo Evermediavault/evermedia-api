@@ -1,6 +1,6 @@
 import { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
-import { getDb } from "../../deps.js";
+import { getPrismaClient } from "../../../db/client.js";
 import { authToken, requireAuth, requireAdmin } from "../../../middleware/auth.js";
 import {
   createPaginationMeta,
@@ -50,7 +50,7 @@ export const usersRouter: FastifyPluginAsync = async (fastify) => {
         throw new BadRequestError("validation.invalidParams", parsed.error.flatten());
       }
       const { page, page_size, sort_by, order } = parsed.data;
-      const prisma = getDb();
+      const prisma = getPrismaClient();
 
       const [list, total] = await Promise.all([
         prisma.user.findMany({
@@ -101,7 +101,7 @@ export const usersRouter: FastifyPluginAsync = async (fastify) => {
         throw new BadRequestError("validation.invalidParams", parsed.error.flatten());
       }
       const { user_id, username, email, password, role } = parsed.data;
-      const prisma = getDb();
+      const prisma = getPrismaClient();
 
       if (user_id) {
         const existing = await prisma.user.findUnique({ where: { uid: user_id } });
@@ -158,7 +158,7 @@ export const usersRouter: FastifyPluginAsync = async (fastify) => {
         throw new BadRequestError("validation.invalidParams", bodyParsed.error.flatten());
       }
       const { disabled } = bodyParsed.data;
-      const prisma = getDb();
+      const prisma = getPrismaClient();
       const existing = await prisma.user.findUnique({ where: { uid }, select: { id: true } });
       if (!existing) {
         throw new NotFoundError("user.notFound");

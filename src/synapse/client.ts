@@ -1,8 +1,11 @@
 import { Synapse, RPC_URLS } from "@filoz/synapse-sdk";
 import { getLogger } from "../core/logger.js";
 import { settings } from "../core/config.js";
+import { toErrorMessage } from "../utils/helpers.js";
+import { t, type Locale } from "../i18n/index.js";
 
 const logger = getLogger("synapse");
+const logLocale = (): Locale => settings.DEFAULT_LOCALE as Locale;
 
 /** Synapse 实例类型（SDK 为 private 构造，此处用 Awaited 推断） */
 type SynapseInstance = Awaited<ReturnType<typeof Synapse.create>>;
@@ -50,14 +53,14 @@ export const getSynapse = async (): Promise<SynapseInstance | null> => {
 
       synapseInstance = instance;
       logger.info({
-        message: "Synapse 客户端已初始化",
+        message: t("log.synapse.initialized", undefined, logLocale()),
         network: instance.getNetwork(),
       });
       return instance;
     } catch (err) {
       logger.error({
-        message: "Synapse 初始化失败",
-        error: err instanceof Error ? err.message : String(err),
+        message: t("log.synapse.initFailed", undefined, logLocale()),
+        error: toErrorMessage(err),
       });
       return null;
     } finally {
@@ -70,11 +73,21 @@ export const getSynapse = async (): Promise<SynapseInstance | null> => {
 
 /**
  * 关闭 Synapse 客户端并释放单例（用于应用关闭时）
+ * 若 SDK 的 provider 有 destroy 则调用以关闭 WebSocket 等连接
  */
 export const disconnectSynapse = async (): Promise<void> => {
-  if (synapseInstance) {
-    synapseInstance = null;
-    initPromise = null;
-    logger.info({ message: "Synapse 客户端已断开" });
+  const instance = synapseInstance;
+  synapseInstance = null;
+  initPromise = null;
+  if (instance) {
+    try {
+      const provider = instance.getProvider() as { destroy?: () => Promise<void> | void };
+      if (typeof provider.destroy === "function") {
+        await Promise.resolve(provider.destroy());
+      }
+    } catch {
+      // 忽略关闭时的错误，单例已清空
+    }
+    logger.info({ message: t("log.synapse.disconnected", undefined, logLocale()) });
   }
 };

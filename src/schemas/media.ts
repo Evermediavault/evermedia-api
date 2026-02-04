@@ -24,6 +24,7 @@ export const UploadFileItemSchema = z.object({
   name: z.string(),
   file_type: z.string(),
   synapse_index_id: z.string(),
+  synapse_data_set_id: z.number().optional(),
   storage_id: z.number().optional(),
   storage_info: StorageProviderSnapshotSchema.optional(),
   uploaded_at: z.string(),
@@ -31,12 +32,17 @@ export const UploadFileItemSchema = z.object({
 
 export type UploadFileItem = z.infer<typeof UploadFileItemSchema>;
 
+/** POST /upload 成功响应：data 为本次创建的 1～N 条文件信息 */
+export const UploadResponseDataSchema = z.array(UploadFileItemSchema);
+export type UploadResponseData = z.infer<typeof UploadResponseDataSchema>;
+
 /** Prisma File 列表/单条与 API 返回格式一致化 */
 export function fileToUploadItem(row: {
   id: number;
   name: string;
   file_type: string;
   synapse_index_id: string;
+  synapse_data_set_id?: number | null;
   storage_id?: number | null;
   storage_info?: unknown;
   uploaded_at: Date;
@@ -46,6 +52,7 @@ export function fileToUploadItem(row: {
     name: row.name,
     file_type: row.file_type,
     synapse_index_id: row.synapse_index_id,
+    synapse_data_set_id: row.synapse_data_set_id ?? undefined,
     storage_id: row.storage_id ?? undefined,
     storage_info: row.storage_info as UploadFileItem["storage_info"],
     uploaded_at: row.uploaded_at.toISOString(),

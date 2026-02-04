@@ -14,7 +14,7 @@ export const CreateOrUpdateUserBodySchema = z
     role: z.enum(USER_ROLES),
   })
   .refine((data) => data.user_id != null || (data.password != null && data.password.length > 0), {
-    message: "password required when creating user",
+    message: "validation.passwordRequiredWhenCreate",
     path: ["password"],
   });
 export type CreateOrUpdateUserBody = z.infer<typeof CreateOrUpdateUserBodySchema>;

@@ -3,6 +3,7 @@ import { getLogger } from "../core/logger.js";
 import { settings } from "../core/config.js";
 import { getPasswordHash } from "../core/security.js";
 import { t, type Locale } from "../i18n/index.js";
+import { toErrorMessage } from "../utils/helpers.js";
 
 const logger = getLogger("db.init");
 
@@ -45,7 +46,7 @@ export async function initializeDatabase(): Promise<void> {
   } catch (error) {
     logger.error({
       message: t("db.init.failed", undefined, locale),
-      error: error instanceof Error ? error.message : String(error),
+      error: toErrorMessage(error),
       stack: error instanceof Error ? error.stack : undefined,
     });
     throw error;

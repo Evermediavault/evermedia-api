@@ -1,11 +1,12 @@
 /**
  * 媒体路由
  * GET  /media/list：获取文件列表（不鉴权）
- * POST /media/upload：上传（仅管理员），multipart 必填 file、providerId，可选 metadata、name（显示名）
- *   - 根据 providerId 查询 getStorageInfo 中的批准提供商详情后入库 storage_id / storage_info
+ * POST /media/upload：上传（仅管理员），multipart 必填 1～N 个 file、providerId，可选 metadata、name（显示名）
+ *   - 单次请求内 1 或 N 个文件归属同一 data set（一次 createContext + Promise.all(upload)）
  */
 import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from "fastify";
-import { getDb, getSynapseClient } from "../../deps.js";
+import { getPrismaClient } from "../../../db/client.js";
+import { getSynapse } from "../../../synapse/client.js";
 import { authToken, requireAuth, requireAdmin } from "../../../middleware/auth.js";
 import { createSuccessResponse, createPaginatedResponse, createPaginationMeta } from "../../../schemas/response.js";
 import { MediaListQuerySchema, fileToUploadItem } from "../../../schemas/media.js";
@@ -15,6 +16,8 @@ import {
   parseMultipartStringField,
   parseMultipartNumberField,
   normalizeMetadataGroups,
+  collectPartsFromMultipart,
+  type CollectedFilePart,
 } from "../../../utils/multipart.js";
 import { toErrorMessage } from "../../../utils/helpers.js";
 import { settings } from "../../../core/config.js";
@@ -66,7 +69,7 @@ export const mediaRouter: FastifyPluginAsync = async (fastify) => {
    * 不鉴权；返回 Synapse 批准的存储 Provider 列表，供上传前选择 providerId
    */
   fastify.get("/storage-info", async (request, reply) => {
-    const synapse = await getSynapseClient();
+    const synapse = await getSynapse();
     if (!synapse) {
       throw new BaseAPIException("media.storageUnavailable", 503);
     }
@@ -88,7 +91,7 @@ export const mediaRouter: FastifyPluginAsync = async (fastify) => {
       throw new BadRequestError("validation.invalidParams");
     }
     const { page, page_size: pageSize } = parsed.data;
-    const prisma = getDb();
+    const prisma = getPrismaClient();
     const [list, total] = await Promise.all([
       prisma.file.findMany({
         where: { deleted_at: null, permission: "public" },
@@ -100,6 +103,7 @@ export const mediaRouter: FastifyPluginAsync = async (fastify) => {
           name: true,
           file_type: true,
           synapse_index_id: true,
+          synapse_data_set_id: true,
           storage_id: true,
           storage_info: true,
           uploaded_at: true,
@@ -114,7 +118,8 @@ export const mediaRouter: FastifyPluginAsync = async (fastify) => {
 
   /**
    * POST /upload
-   * 仅管理员；multipart 必填 file、providerId；可选 metadata（JSON 字符串）、name
+   * 仅管理员；multipart 必填 1～N 个 file、providerId；可选 metadata（JSON 字符串）、每文件 name（显示名）
+   * 单次请求内所有文件归属同一 Synapse data set（一次 createContext + Promise.all(upload)）
    */
   fastify.post<{
     Body: unknown;
@@ -128,44 +133,18 @@ export const mediaRouter: FastifyPluginAsync = async (fastify) => {
 async function doUpload(request: FastifyRequest, reply: FastifyReply) {
   const uid = request.user!.sub;
 
-  const synapse = await getSynapseClient();
+  const synapse = await getSynapse();
   if (!synapse) {
     throw new BaseAPIException("media.storageUnavailable", 503);
   }
 
-  let buffer: Buffer;
-  let filename: string;
-  let mimeType: string;
-  let metadata: Record<string, unknown> = {};
-  let fields: Record<string, unknown> | undefined;
+  let fields: Record<string, unknown>;
+  let files: CollectedFilePart[];
 
   try {
-    const data = await request.file();
-    if (!data) {
-      throw new BadRequestError("media.fileRequired");
-    }
-
-    fields = data.fields as Record<string, unknown> | undefined;
-    const rawMetadata = parseMultipartMetadata(fields);
-    try {
-      const normalized = normalizeMetadataGroups(rawMetadata);
-      metadata = normalized.groups.length > 0 ? { groups: normalized.groups } : {};
-    } catch {
-      throw new BadRequestError("media.metadataNameValueRequired");
-    }
-
-    const customName = parseMultipartStringField(fields, "name");
-    if (customName !== undefined) {
-      filename = customName.slice(0, 255);
-    } else {
-      filename = data.filename ?? "unknown";
-    }
-    mimeType = (data.mimetype ?? "application/octet-stream").trim();
-    if (!isAllowedMime(mimeType)) {
-      throw new BadRequestError("media.fileTypeNotAllowed");
-    }
-
-    buffer = await data.toBuffer();
+    const collected = await collectPartsFromMultipart(request.parts());
+    fields = collected.fields;
+    files = collected.files;
   } catch (err) {
     if (isFileTooLargeError(err)) {
       throw new BadRequestError(
@@ -175,7 +154,43 @@ async function doUpload(request: FastifyRequest, reply: FastifyReply) {
     throw err;
   }
 
-  const prisma = getDb();
+  if (files.length === 0) {
+    throw new BadRequestError("media.fileRequired");
+  }
+  if (files.length > settings.UPLOAD_MAX_FILES) {
+    throw new BadRequestError(
+      getMsg(request, "media.fileCountExceeded", { max: settings.UPLOAD_MAX_FILES })
+    );
+  }
+
+  const maxSizeBytes = settings.UPLOAD_MAX_FILE_SIZE_KB * 1024;
+  for (let i = 0; i < files.length; i++) {
+    if (files[i].buffer.length > maxSizeBytes) {
+      throw new BadRequestError(
+        getMsg(request, "media.fileTooLarge", { max: settings.UPLOAD_MAX_FILE_SIZE_KB })
+      );
+    }
+    const mime = files[i].mimetype.trim();
+    if (!isAllowedMime(mime)) {
+      throw new BadRequestError("media.fileTypeNotAllowed");
+    }
+  }
+
+  /** 是否为索引格式（file_0, name_0, metadata_0）：每文件独立 name/metadata */
+  const isIndexedFormat = "name_0" in fields || "metadata_0" in fields;
+  const defaultMetadata = parseMultipartMetadata(fields);
+  let defaultNormalized: { groups: { name: string; type: string; value: string }[] } = { groups: [] };
+  try {
+    defaultNormalized = normalizeMetadataGroups(defaultMetadata);
+  } catch {
+    if (!isIndexedFormat) {
+      throw new BadRequestError("media.metadataNameValueRequired");
+    }
+  }
+  const defaultMetadataJson =
+    defaultNormalized.groups.length > 0 ? { groups: defaultNormalized.groups } : {};
+
+  const prisma = getPrismaClient();
   const user = await prisma.user.findUnique({
     where: { uid },
     select: { id: true },
@@ -196,21 +211,23 @@ async function doUpload(request: FastifyRequest, reply: FastifyReply) {
   }
   const storageInfoJson = serializeProviderInfo(provider);
 
-  let synapseIndexId: string;
-  let dataSetId: number | undefined;
+  let dataSetIdForBatch: number | undefined;
+  let results: { pieceCid: unknown; size?: number; pieceId?: number }[];
+
   try {
-    const context = await synapse.storage.createContext({
+    const ctx = await synapse.storage.createContext({
       providerId,
       forceCreateDataSet: settings.SYNAPSE_FORCE_CREATE_DATA_SET,
     });
-    const result = await context.upload(new Uint8Array(buffer), { metadata: {} });
-    synapseIndexId = typeof result.pieceCid === "string" ? result.pieceCid : String(result.pieceCid);
-    dataSetId = context.dataSetId; // 复用已有 dataset 时 createContext 后即有；新建时 upload 完成后被赋值
+    results = await Promise.all(
+      files.map((f) => ctx.upload(new Uint8Array(f.buffer), { metadata: {} }))
+    );
+    dataSetIdForBatch = ctx.dataSetId;
   } catch (err) {
     const errMsg = toErrorMessage(err);
     const causeMsg = err instanceof Error && err.cause instanceof Error ? err.cause.message : null;
     log.error(
-      { err, message: "Synapse upload failed", reason: errMsg, cause: causeMsg, filename, size: buffer.length },
+      { err, message: "Synapse upload failed", reason: errMsg, cause: causeMsg, fileCount: files.length },
       "Synapse upload failed"
     );
     const msg = getMsg(request, "media.uploadFailed");
@@ -218,21 +235,44 @@ async function doUpload(request: FastifyRequest, reply: FastifyReply) {
     throw new BaseAPIException(msg, 502, detail);
   }
 
-  const file = await prisma.file.create({
-    data: {
-      name: filename,
-      file_type: mimeType,
-      metadata: metadata as object,
-      uploader_id: user.id,
-      permission: "public",
-      cost: 0,
-      synapse_index_id: synapseIndexId,
-      synapse_data_set_id: dataSetId ?? undefined,
-      storage_id: providerId,
-      storage_info: storageInfoJson as object,
-    },
-  });
+  const dataSetId = dataSetIdForBatch;
+
+  const created = await Promise.all(
+    files.map((f, i) => {
+      const customName = isIndexedFormat
+        ? parseMultipartStringField(fields, `name_${i}`)
+        : parseMultipartStringField(f.fields, "name");
+      const filename =
+        (customName !== undefined ? customName.slice(0, 255) : (f.filename ?? "unknown").slice(0, 255));
+      let fileMetadata: object = defaultMetadataJson as object;
+      if (isIndexedFormat) {
+        const raw = parseMultipartMetadata(fields, `metadata_${i}`);
+        try {
+          const norm = normalizeMetadataGroups(raw);
+          fileMetadata = norm.groups.length > 0 ? { groups: norm.groups } : {};
+        } catch {
+          fileMetadata = {};
+        }
+      }
+      const pieceCid = results[i].pieceCid;
+      const synapseIndexId = typeof pieceCid === "string" ? pieceCid : String(pieceCid);
+      return prisma.file.create({
+        data: {
+          name: filename,
+          file_type: f.mimetype.trim().slice(0, 128),
+          metadata: fileMetadata,
+          uploader_id: user.id,
+          permission: "public",
+          cost: 0,
+          synapse_index_id: synapseIndexId,
+          synapse_data_set_id: dataSetId ?? undefined,
+          storage_id: providerId,
+          storage_info: storageInfoJson as object,
+        },
+      });
+    })
+  );
 
   const message = getMsg(request, "success.created");
-  return reply.status(201).send(createSuccessResponse(message, fileToUploadItem(file)));
+  return reply.status(201).send(createSuccessResponse(message, created.map((f) => fileToUploadItem(f))));
 }

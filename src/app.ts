@@ -11,9 +11,10 @@ import { i18nPlugin } from "./i18n/middleware.js";
 import { loggingPlugin } from "./middleware/logging.js";
 import { errorHandler } from "./middleware/exception.js";
 import { apiV1Router } from "./api/v1/router.js";
-import { t } from "./i18n/index.js";
+import { t, type Locale } from "./i18n/index.js";
 
 const logger = getLogger("app");
+const logLocale = (): Locale => settings.DEFAULT_LOCALE as Locale;
 
 /**
  * 创建 Fastify 应用实例
@@ -26,7 +27,12 @@ export const createApplication = async (): Promise<FastifyInstance> => {
     disableRequestLogging: true,
   });
 
-  await app.register(cors, { origin: true, credentials: true });
+  await app.register(cors, {
+    origin: settings.CORS_ORIGIN_ALLOW_ALL ? true : settings.CORS_ORIGINS,
+    credentials: settings.CORS_CREDENTIALS,
+    methods: settings.CORS_METHODS,
+    allowedHeaders: settings.CORS_HEADERS,
+  });
   await app.register(compress, { threshold: 1000 });
   await app.register(multipart, {
     limits: {
@@ -64,7 +70,7 @@ export const createApplication = async (): Promise<FastifyInstance> => {
   // 应用生命周期钩子
   app.addHook("onReady", async () => {
     logger.info({
-      message: "应用启动",
+      message: t("log.app.start", undefined, logLocale()),
       environment: settings.ENVIRONMENT,
       version: settings.APP_VERSION,
     });
@@ -74,7 +80,7 @@ export const createApplication = async (): Promise<FastifyInstance> => {
   });
 
   app.addHook("onClose", async () => {
-    logger.info({ message: "应用关闭" });
+    logger.info({ message: t("log.app.close", undefined, logLocale()) });
   });
 
   return app;

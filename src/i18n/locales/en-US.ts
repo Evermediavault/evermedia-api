@@ -34,6 +34,7 @@ export default {
   validation: {
     required: "This field is required",
     invalidParams: "Invalid request parameters",
+    passwordRequiredWhenCreate: "Password is required when creating user",
     email: "Please enter a valid email address",
     url: "Please enter a valid URL",
     password: "Password must be at least 8 characters, containing uppercase, lowercase, numbers and special characters",
@@ -74,6 +75,7 @@ export default {
 
   // Success messages
   success: {
+    get: "Retrieved successfully",
     list: "Retrieved successfully",
     saved: "Saved successfully",
     deleted: "Deleted successfully",
@@ -138,6 +140,7 @@ export default {
   // Upload / media
   media: {
     fileRequired: "Please select a file to upload",
+    fileCountExceeded: "At most {max} files per upload",
     fileTypeNotAllowed: "File type not allowed",
     fileTooLarge: "File too large (max {max}KB)",
     storageUnavailable: "Storage service unavailable",
@@ -154,6 +157,27 @@ export default {
     dbError: "Database error",
     dbConnectionError: "Database connection error",
     unhandledError: "Unhandled error",
+    app: {
+      start: "Application started",
+      close: "Application closing",
+    },
+    server: {
+      builtDatabaseUrl: "Using built DATABASE_URL from config",
+      started: "Server started successfully",
+      startFailed: "Server failed to start",
+      sigint: "Received SIGINT, shutting down...",
+      sigterm: "Received SIGTERM, shutting down...",
+    },
+    request: {
+      start: "Request started",
+      complete: "Request completed",
+      failed: "Request failed",
+    },
+    synapse: {
+      initialized: "Synapse client initialized",
+      initFailed: "Synapse initialization failed",
+      disconnected: "Synapse client disconnected",
+    },
   },
 
   // Server related
