@@ -139,11 +139,13 @@ export default {
   media: {
     fileRequired: "Please select a file to upload",
     fileTypeNotAllowed: "File type not allowed",
-    fileTooLarge: "File too large, check size limit",
+    fileTooLarge: "File too large (max {max}KB)",
     storageUnavailable: "Storage service unavailable",
     uploadFailed: "Upload to storage failed",
     listFailed: "Failed to get file list",
     metadataNameValueRequired: "Metadata name and value must not be empty for each entry",
+    providerIdRequired: "Storage provider is required (providerId)",
+    providerInvalidOrInactive: "Selected storage provider is invalid or inactive",
   },
 
   // Log (server-side)

@@ -51,9 +51,9 @@ export const createApplication = async (): Promise<FastifyInstance> => {
     prefix: settings.API_V1_PREFIX,
   });
 
-  // 根路径
-  app.get("/", async () => {
-    const locale = settings.DEFAULT_LOCALE as "zh-CN" | "en-US";
+  // 根路径（与其它接口一致，按请求 locale 返回）
+  app.get("/", async (request) => {
+    const locale = request.locale;
     return {
       message: t("app.welcome", { name: settings.APP_NAME }, locale),
       version: settings.APP_VERSION,

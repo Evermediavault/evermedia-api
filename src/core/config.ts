@@ -251,20 +251,3 @@ export const isProduction = (): boolean => {
 export const isTesting = (): boolean => {
   return settings.ENVIRONMENT === Environment.TESTING;
 };
-
-// 为了兼容性，添加 settings 的属性访问器
-Object.defineProperty(settings, "is_development", {
-  get: () => isDevelopment(),
-});
-
-Object.defineProperty(settings, "is_production", {
-  get: () => isProduction(),
-});
-
-Object.defineProperty(settings, "is_testing", {
-  get: () => isTesting(),
-});
-
-Object.defineProperty(settings, "database_url", {
-  get: () => getDatabaseUrl(),
-});

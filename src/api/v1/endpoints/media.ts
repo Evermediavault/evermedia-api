@@ -1,23 +1,47 @@
 /**
  * 媒体路由
  * GET  /media/list：获取文件列表（不鉴权）
- * POST /media/upload：上传（仅管理员），multipart，字段 file，可选 metadata
+ * POST /media/upload：上传（仅管理员），multipart 必填 file、providerId，可选 metadata、name（显示名）
+ *   - 根据 providerId 查询 getStorageInfo 中的批准提供商详情后入库 storage_id / storage_info
  */
 import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from "fastify";
-import { getDb } from "../../deps.js";
-import { getSynapse } from "../../../synapse/index.js";
+import { getDb, getSynapseClient } from "../../deps.js";
 import { authToken, requireAuth, requireAdmin } from "../../../middleware/auth.js";
 import { createSuccessResponse, createPaginatedResponse, createPaginationMeta } from "../../../schemas/response.js";
-import type { UploadFileItem } from "../../../schemas/media.js";
-import { MediaListQuerySchema } from "../../../schemas/media.js";
+import { MediaListQuerySchema, fileToUploadItem } from "../../../schemas/media.js";
 import { getMsg } from "../../../i18n/utils.js";
-import { parseMultipartMetadata, normalizeMetadataGroups } from "../../../utils/multipart.js";
+import {
+  parseMultipartMetadata,
+  parseMultipartStringField,
+  parseMultipartNumberField,
+  normalizeMetadataGroups,
+} from "../../../utils/multipart.js";
 import { toErrorMessage } from "../../../utils/helpers.js";
 import { settings } from "../../../core/config.js";
 import { getLogger } from "../../../core/logger.js";
 import { BaseAPIException, UnauthorizedError, BadRequestError } from "../../../core/exceptions.js";
 
 const log = getLogger("media");
+
+/** 将 SDK ProviderInfo 序列化为可落库/返回前端的 JSON 快照（无 bigint） */
+function serializeProviderInfo(provider: {
+  id: number;
+  name: string;
+  description: string;
+  active: boolean;
+  serviceProvider: string;
+  products?: Partial<Record<"PDP", { data?: { serviceURL?: string } }>>;
+}): { id: number; name: string; description: string; isActive: boolean; serviceProvider: string; pdp: { serviceURL: string } } {
+  const pdpUrl = provider.products?.PDP?.data?.serviceURL ?? "";
+  return {
+    id: provider.id,
+    name: provider.name,
+    description: provider.description,
+    isActive: provider.active,
+    serviceProvider: provider.serviceProvider,
+    pdp: { serviceURL: pdpUrl },
+  };
+}
 
 function isAllowedMime(mime: string): boolean {
   const allowed = settings.UPLOAD_ALLOWED_FILE_TYPES;
@@ -26,7 +50,32 @@ function isAllowedMime(mime: string): boolean {
   return false;
 }
 
+/** @fastify/multipart 在文件超限时抛出的错误 code */
+function isFileTooLargeError(err: unknown): err is { code: string } {
+  return (
+    err != null &&
+    typeof err === "object" &&
+    "code" in err &&
+    (err as { code: string }).code === "FST_REQ_FILE_TOO_LARGE"
+  );
+}
+
 export const mediaRouter: FastifyPluginAsync = async (fastify) => {
+  /**
+   * GET /storage-info
+   * 不鉴权；返回 Synapse 批准的存储 Provider 列表，供上传前选择 providerId
+   */
+  fastify.get("/storage-info", async (request, reply) => {
+    const synapse = await getSynapseClient();
+    if (!synapse) {
+      throw new BaseAPIException("media.storageUnavailable", 503);
+    }
+    const storageInfo = await synapse.storage.getStorageInfo();
+    const providers = storageInfo.providers.map((p) => serializeProviderInfo(p));
+    const message = getMsg(request, "success.list");
+    return reply.send(createSuccessResponse(message, { providers }));
+  });
+
   /**
    * GET /list
    * 不鉴权；仅返回 permission=public 且未删除的文件，支持分页
@@ -36,7 +85,7 @@ export const mediaRouter: FastifyPluginAsync = async (fastify) => {
   }>("/list", async (request, reply) => {
     const parsed = MediaListQuerySchema.safeParse(request.query);
     if (!parsed.success) {
-      throw new BadRequestError(getMsg(request, "validation.invalidParams", "Invalid query parameters"));
+      throw new BadRequestError("validation.invalidParams");
     }
     const { page, page_size: pageSize } = parsed.data;
     const prisma = getDb();
@@ -51,25 +100,21 @@ export const mediaRouter: FastifyPluginAsync = async (fastify) => {
           name: true,
           file_type: true,
           synapse_index_id: true,
+          storage_id: true,
+          storage_info: true,
           uploaded_at: true,
         },
       }),
       prisma.file.count({ where: { deleted_at: null, permission: "public" } }),
     ]);
-    const data: UploadFileItem[] = list.map((f) => ({
-      id: f.id,
-      name: f.name,
-      file_type: f.file_type,
-      synapse_index_id: f.synapse_index_id,
-      uploaded_at: f.uploaded_at.toISOString(),
-    }));
-    const message = getMsg(request, "success.list", "Retrieved successfully");
+    const data = list.map((f) => fileToUploadItem(f));
+    const message = getMsg(request, "success.list");
     return reply.send(createPaginatedResponse(message, data, createPaginationMeta(page, pageSize, total)));
   });
 
   /**
    * POST /upload
-   * 仅管理员；multipart fieldName: file；可选 metadata（JSON 字符串）
+   * 仅管理员；multipart 必填 file、providerId；可选 metadata（JSON 字符串）、name
    */
   fastify.post<{
     Body: unknown;
@@ -83,47 +128,48 @@ export const mediaRouter: FastifyPluginAsync = async (fastify) => {
 async function doUpload(request: FastifyRequest, reply: FastifyReply) {
   const uid = request.user!.sub;
 
-  const synapse = await getSynapse();
+  const synapse = await getSynapseClient();
   if (!synapse) {
-    throw new BaseAPIException(
-      getMsg(request, "media.storageUnavailable", "Storage service unavailable"),
-      503
-    );
+    throw new BaseAPIException("media.storageUnavailable", 503);
   }
 
   let buffer: Buffer;
   let filename: string;
   let mimeType: string;
   let metadata: Record<string, unknown> = {};
+  let fields: Record<string, unknown> | undefined;
 
   try {
     const data = await request.file();
     if (!data) {
-      throw new BadRequestError(getMsg(request, "media.fileRequired", "Missing file field"));
+      throw new BadRequestError("media.fileRequired");
     }
 
-    const rawMetadata = parseMultipartMetadata(data.fields as Record<string, unknown> | undefined);
+    fields = data.fields as Record<string, unknown> | undefined;
+    const rawMetadata = parseMultipartMetadata(fields);
     try {
       const normalized = normalizeMetadataGroups(rawMetadata);
       metadata = normalized.groups.length > 0 ? { groups: normalized.groups } : {};
     } catch {
-      throw new BadRequestError(
-        getMsg(request, "media.metadataNameValueRequired", "Metadata name and value must not be empty for each entry")
-      );
+      throw new BadRequestError("media.metadataNameValueRequired");
     }
 
-    filename = data.filename ?? "unknown";
+    const customName = parseMultipartStringField(fields, "name");
+    if (customName !== undefined) {
+      filename = customName.slice(0, 255);
+    } else {
+      filename = data.filename ?? "unknown";
+    }
     mimeType = (data.mimetype ?? "application/octet-stream").trim();
     if (!isAllowedMime(mimeType)) {
-      throw new BadRequestError(getMsg(request, "media.fileTypeNotAllowed", "File type not allowed"));
+      throw new BadRequestError("media.fileTypeNotAllowed");
     }
 
     buffer = await data.toBuffer();
   } catch (err) {
-    const isSize = err && typeof err === "object" && "code" in err && err.code === "FST_REQ_FILE_TOO_LARGE";
-    if (isSize) {
+    if (isFileTooLargeError(err)) {
       throw new BadRequestError(
-        getMsg(request, "media.fileTooLarge", `File too large (max ${settings.UPLOAD_MAX_FILE_SIZE_KB}KB)`)
+        getMsg(request, "media.fileTooLarge", { max: settings.UPLOAD_MAX_FILE_SIZE_KB })
       );
     }
     throw err;
@@ -135,16 +181,31 @@ async function doUpload(request: FastifyRequest, reply: FastifyReply) {
     select: { id: true },
   });
   if (!user) {
-    throw new UnauthorizedError(getMsg(request, "auth.userNotFound", "User not found"));
+    throw new UnauthorizedError("auth.userNotFound");
   }
 
+  const providerId = parseMultipartNumberField(fields, "providerId");
+  if (providerId === undefined || providerId === null) {
+    throw new BadRequestError("media.providerIdRequired");
+  }
+
+  const storageInfo = await synapse.storage.getStorageInfo();
+  const provider = storageInfo.providers.find((p) => p.id === providerId);
+  if (!provider || !provider.active) {
+    throw new BadRequestError("media.providerInvalidOrInactive");
+  }
+  const storageInfoJson = serializeProviderInfo(provider);
+
   let synapseIndexId: string;
+  let dataSetId: number | undefined;
   try {
     const context = await synapse.storage.createContext({
+      providerId,
       forceCreateDataSet: settings.SYNAPSE_FORCE_CREATE_DATA_SET,
     });
     const result = await context.upload(new Uint8Array(buffer), { metadata: {} });
     synapseIndexId = typeof result.pieceCid === "string" ? result.pieceCid : String(result.pieceCid);
+    dataSetId = context.dataSetId; // 复用已有 dataset 时 createContext 后即有；新建时 upload 完成后被赋值
   } catch (err) {
     const errMsg = toErrorMessage(err);
     const causeMsg = err instanceof Error && err.cause instanceof Error ? err.cause.message : null;
@@ -152,7 +213,7 @@ async function doUpload(request: FastifyRequest, reply: FastifyReply) {
       { err, message: "Synapse upload failed", reason: errMsg, cause: causeMsg, filename, size: buffer.length },
       "Synapse upload failed"
     );
-    const msg = getMsg(request, "media.uploadFailed", "Upload to storage failed");
+    const msg = getMsg(request, "media.uploadFailed");
     const detail = { reason: errMsg, cause: causeMsg ?? undefined };
     throw new BaseAPIException(msg, 502, detail);
   }
@@ -166,17 +227,12 @@ async function doUpload(request: FastifyRequest, reply: FastifyReply) {
       permission: "public",
       cost: 0,
       synapse_index_id: synapseIndexId,
+      synapse_data_set_id: dataSetId ?? undefined,
+      storage_id: providerId,
+      storage_info: storageInfoJson as object,
     },
   });
 
-  const data: UploadFileItem = {
-    id: file.id,
-    name: file.name,
-    file_type: file.file_type,
-    synapse_index_id: file.synapse_index_id,
-    uploaded_at: file.uploaded_at.toISOString(),
-  };
-
-  const message = getMsg(request, "success.created", "Created");
-  return reply.status(201).send(createSuccessResponse(message, data));
+  const message = getMsg(request, "success.created");
+  return reply.status(201).send(createSuccessResponse(message, fileToUploadItem(file)));
 }

@@ -139,11 +139,13 @@ export default {
   media: {
     fileRequired: "请选择要上传的文件",
     fileTypeNotAllowed: "不允许该文件类型",
-    fileTooLarge: "文件过大，请检查大小限制",
+    fileTooLarge: "文件过大（最大 {max}KB）",
     storageUnavailable: "存储服务暂不可用",
     uploadFailed: "上传到存储失败",
     listFailed: "获取文件列表失败",
     metadataNameValueRequired: "元数据每条目的名称与值均不能为空",
+    providerIdRequired: "请选择存储服务商（providerId 必填）",
+    providerInvalidOrInactive: "所选存储服务商无效或未启用",
   },
 
   // 日志（服务端）

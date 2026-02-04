@@ -51,9 +51,9 @@ export async function requireAuth(
   reply: FastifyReply
 ): Promise<void> {
   if (!request.user) {
-    const err = new UnauthorizedError("Login required");
+    const err = new UnauthorizedError("auth.loginRequired");
     return reply.status(err.statusCode).send(
-      createErrorResponse(getMsg(request, "auth.loginRequired", err.message), err.statusCode)
+      createErrorResponse(getMsg(request, "auth.loginRequired"), err.statusCode)
     );
   }
 }
@@ -74,9 +74,9 @@ export function requireRoles(roles: string[]) {
   ): Promise<void> {
     const role = (request.user!.role ?? "").toLowerCase();
     if (!set.has(role)) {
-      const err = new ForbiddenError("Insufficient permissions");
+      const err = new ForbiddenError("auth.permissionDenied");
       return reply.status(err.statusCode).send(
-        createErrorResponse(getMsg(request, "auth.permissionDenied", err.message), err.statusCode)
+        createErrorResponse(getMsg(request, "auth.permissionDenied"), err.statusCode)
       );
     }
   };

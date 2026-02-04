@@ -1,6 +1,6 @@
 import { FastifyPluginAsync, FastifyReply } from "fastify";
 import { getDb } from "../../deps.js";
-import { settings } from "../../../core/config.js";
+import { settings, isProduction } from "../../../core/config.js";
 import { createSuccessResponse, createErrorResponse } from "../../../schemas/response.js";
 import { getMsg } from "../../../i18n/utils.js";
 
@@ -13,7 +13,7 @@ export const healthRouter: FastifyPluginAsync = async (fastify) => {
    * GET /health
    */
   fastify.get("/health", async (request) => {
-    const msg = getMsg(request, "health.healthy", "Service is healthy");
+    const msg = getMsg(request, "health.healthy");
     return createSuccessResponse(msg, {
       status: "healthy",
       timestamp: new Date().toISOString(),
@@ -28,7 +28,7 @@ export const healthRouter: FastifyPluginAsync = async (fastify) => {
    * Kubernetes 存活探针端点
    */
   fastify.get("/health/live", async (request) => {
-    const msg = getMsg(request, "health.alive", "Service is alive");
+    const msg = getMsg(request, "health.alive");
     return createSuccessResponse(msg, {
       status: "alive",
       timestamp: new Date().toISOString(),
@@ -45,7 +45,7 @@ export const healthRouter: FastifyPluginAsync = async (fastify) => {
       const db = getDb();
       await db.$queryRaw`SELECT 1`;
 
-      const msg = getMsg(request, "health.ready", "Service is ready");
+      const msg = getMsg(request, "health.ready");
       return createSuccessResponse(msg, {
         status: "ready",
         timestamp: new Date().toISOString(),
@@ -53,15 +53,16 @@ export const healthRouter: FastifyPluginAsync = async (fastify) => {
       });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      const msg = getMsg(request, "health.notReady", "Service is not ready");
-      return reply.status(503).send(
-        createErrorResponse(msg, 503, {
-          status: "not_ready",
-          timestamp: new Date().toISOString(),
-          database: "disconnected",
-          error: errorMessage,
-        })
-      );
+      const msg = getMsg(request, "health.notReady");
+      const detail: { status: string; timestamp: string; database: string; error?: string } = {
+        status: "not_ready",
+        timestamp: new Date().toISOString(),
+        database: "disconnected",
+      };
+      if (!isProduction()) {
+        detail.error = errorMessage;
+      }
+      return reply.status(503).send(createErrorResponse(msg, 503, detail));
     }
   });
 };

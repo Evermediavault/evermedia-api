@@ -33,10 +33,10 @@ export const errorHandler = (
 ): void => {
   setCorsHeaders(request, reply);
 
-  // 处理自定义 API 异常
+  // 处理自定义 API 异常（error.message 为 i18n key，统一用 getMsg 解析后返回）
   if (error instanceof BaseAPIException) {
     logger.warn({
-      message: getMsg(request, "log.apiException", "API exception"),
+      message: getMsg(request, "log.apiException"),
       errorMessage: error.message,
       statusCode: error.statusCode,
       detail: error.detail,
@@ -44,8 +44,9 @@ export const errorHandler = (
       method: request.method,
     });
 
+    const message = getMsg(request, error.message);
     const errorResponse = createErrorResponse(
-      error.message,
+      message,
       error.statusCode,
       error.detail
     );
@@ -57,7 +58,7 @@ export const errorHandler = (
   // 处理 Prisma 数据库异常
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     logger.error({
-      message: getMsg(request, "log.dbError", "Database error"),
+      message: getMsg(request, "log.dbError"),
       error: error.message,
       code: error.code,
       meta: error.meta,
@@ -65,12 +66,12 @@ export const errorHandler = (
       method: request.method,
     });
 
-    const dbError = new DatabaseError("数据库操作失败", {
+    const dbError = new DatabaseError("error.dbOperationFailed", {
       code: error.code,
       meta: error.meta,
     });
 
-    const message = getMsg(request, "error.dbOperationFailed", dbError.message);
+    const message = getMsg(request, dbError.message);
     const errorResponse = createErrorResponse(
       message,
       dbError.statusCode,
@@ -84,15 +85,15 @@ export const errorHandler = (
   // 处理 Prisma 客户端初始化错误
   if (error instanceof Prisma.PrismaClientInitializationError) {
     logger.error({
-      message: getMsg(request, "log.dbConnectionError", "Database connection error"),
+      message: getMsg(request, "log.dbConnectionError"),
       error: error.message,
       path: request.url,
       method: request.method,
     });
 
-    const dbError = new DatabaseError("数据库连接失败", error.message);
+    const dbError = new DatabaseError("error.dbConnectionFailed", error.message);
 
-    const message = getMsg(request, "error.dbConnectionFailed", dbError.message);
+    const message = getMsg(request, dbError.message);
     const errorResponse = createErrorResponse(
       message,
       dbError.statusCode,
@@ -105,7 +106,7 @@ export const errorHandler = (
 
   const errMsg = toErrorMessage(error);
   logger.error({
-    message: getMsg(request, "log.unhandledError", "Unhandled error"),
+    message: getMsg(request, "log.unhandledError"),
     error: errMsg,
     errorType: error instanceof Error ? error.constructor.name : "Unknown",
     stack: error instanceof Error ? error.stack : undefined,
@@ -113,8 +114,8 @@ export const errorHandler = (
     method: request.method,
   });
 
-  const internalError = new InternalServerError("服务器内部错误");
-  const message = getMsg(request, "error.internalServerError", internalError.message);
+  const internalError = new InternalServerError("error.internalServerError");
+  const message = getMsg(request, internalError.message);
 
   const errorResponse = createErrorResponse(
     message,

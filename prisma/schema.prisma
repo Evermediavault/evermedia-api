@@ -28,7 +28,7 @@ model User {
 
   files File[]
 
-  @@map("users")
+  @@map("ev_users")
   @@index([uid])
   @@index([username])
   @@index([email])
@@ -46,13 +46,17 @@ model File {
   project_name    String?   @db.VarChar(255)
   project_info     Json?     @db.Json
   synapse_index_id String    @db.VarChar(255)
+  synapse_data_set_id Int?   // Synapse PDPVerifier data set ID（createContext/upload 后可得）
+  storage_id       Int?      // Synapse 批准的 Provider ID（上传时指定）
+  storage_info     Json?     // 上传时使用的 Provider 快照（id/name/description/isActive/serviceProvider/pdp.serviceURL）
   uploaded_at      DateTime  @default(now())
   deleted_at       DateTime?
 
   uploader User @relation(fields: [uploader_id], references: [id], onDelete: Restrict)
 
-  @@map("files")
+  @@map("ev_files")
   @@index([uploader_id])
   @@index([synapse_index_id])
+  @@index([storage_id])
   @@index([deleted_at])
 }

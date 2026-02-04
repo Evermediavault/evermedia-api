@@ -35,6 +35,7 @@ describe("Auth Endpoints", () => {
         payload: { username: "admin", password: "wrongpassword" },
         headers: { "content-type": "application/json" },
       });
+      // 500 仅在 DB 不可用时出现（如 CI 未配置 DATABASE_URL），接受以通过环境
       if (res.statusCode === 500) {
         console.warn("auth admin/login 401 test got 500 (DB may be unavailable):", res.body);
       }
@@ -51,6 +52,7 @@ describe("Auth Endpoints", () => {
         payload: { username: "admin", password: "admin*?&123456" },
         headers: { "content-type": "application/json" },
       });
+      // 有 DB 时期望 200；无 DB 时可能 500，接受以通过环境
       if (res.statusCode === 500) {
         console.warn("auth admin/login success test got 500 (DB may be unavailable):", res.body);
       }

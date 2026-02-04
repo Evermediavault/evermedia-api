@@ -27,10 +27,10 @@ export class BaseAPIException extends Error {
 }
 
 /**
- * 资源未找到异常
+ * 资源未找到异常（message 为 i18n key，由 errorHandler 用 getMsg 解析）
  */
 export class NotFoundError extends BaseAPIException {
-  constructor(message: string = "资源未找到", detail?: unknown) {
+  constructor(message: string = "error.notFound", detail?: unknown) {
     super(message, 404, detail);
   }
 }
@@ -39,7 +39,7 @@ export class NotFoundError extends BaseAPIException {
  * 请求参数错误异常
  */
 export class BadRequestError extends BaseAPIException {
-  constructor(message: string = "请求参数错误", detail?: unknown) {
+  constructor(message: string = "validation.badRequest", detail?: unknown) {
     super(message, 400, detail);
   }
 }
@@ -48,7 +48,7 @@ export class BadRequestError extends BaseAPIException {
  * 未授权异常
  */
 export class UnauthorizedError extends BaseAPIException {
-  constructor(message: string = "未授权访问", detail?: unknown) {
+  constructor(message: string = "auth.loginRequired", detail?: unknown) {
     super(message, 401, detail);
   }
 }
@@ -57,7 +57,7 @@ export class UnauthorizedError extends BaseAPIException {
  * 禁止访问异常
  */
 export class ForbiddenError extends BaseAPIException {
-  constructor(message: string = "禁止访问", detail?: unknown) {
+  constructor(message: string = "error.forbidden", detail?: unknown) {
     super(message, 403, detail);
   }
 }
@@ -66,7 +66,7 @@ export class ForbiddenError extends BaseAPIException {
  * 资源冲突异常
  */
 export class ConflictError extends BaseAPIException {
-  constructor(message: string = "资源冲突", detail?: unknown) {
+  constructor(message: string = "error.conflict", detail?: unknown) {
     super(message, 409, detail);
   }
 }
@@ -75,7 +75,7 @@ export class ConflictError extends BaseAPIException {
  * 服务器内部错误异常
  */
 export class InternalServerError extends BaseAPIException {
-  constructor(message: string = "服务器内部错误", detail?: unknown) {
+  constructor(message: string = "error.internalServerError", detail?: unknown) {
     super(message, 500, detail);
   }
 }
@@ -84,7 +84,7 @@ export class InternalServerError extends BaseAPIException {
  * 数据库错误异常
  */
 export class DatabaseError extends BaseAPIException {
-  constructor(message: string = "数据库操作失败", detail?: unknown) {
+  constructor(message: string = "error.dbOperationFailed", detail?: unknown) {
     super(message, 500, detail);
   }
 }

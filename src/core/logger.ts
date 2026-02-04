@@ -56,23 +56,3 @@ export const logger = createLogger();
 export const getLogger = (name: string = "app"): pino.Logger => {
   return logger.child({ module: name });
 };
-
-/**
- * 绑定请求ID到日志上下文
- *
- * 注意：在 Fastify 中，请求 ID 通过 request.log 自动绑定
- * 这个函数保留用于兼容性，实际使用中通过 Fastify 的日志系统处理
- *
- * @param requestId - 请求ID
- */
-export const bindRequestId = (requestId: string): void => {
-  // Fastify 的 request.log 会自动包含请求上下文
-  // 如果需要自定义上下文，可以使用 AsyncLocalStorage
-};
-
-/**
- * 清除日志上下文
- */
-export const clearContext = (): void => {
-  // Fastify 的日志上下文在请求结束时自动清除
-};

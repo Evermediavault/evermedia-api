@@ -1,10 +1,8 @@
-/**
- * 从 multipart fields 中解析指定字段为 JSON 对象；解析失败或非对象则返回空对象
- */
-export function parseMultipartMetadata(
+/** 从 @fastify/multipart field 中取出 value，非 field 类型返回 undefined */
+function getFieldPart(
   fields: Record<string, unknown> | undefined,
-  fieldName = "metadata"
-): Record<string, unknown> {
+  fieldName: string
+): unknown {
   const part = fields?.[fieldName];
   if (
     !part ||
@@ -13,9 +11,52 @@ export function parseMultipartMetadata(
     (part as { type: string }).type !== "field" ||
     !("value" in part)
   ) {
-    return {};
+    return undefined;
   }
-  const raw = (part as { value: unknown }).value;
+  return (part as { value: unknown }).value;
+}
+
+/**
+ * 从 multipart fields 中解析单个字符串字段（如可选的文件显示名）
+ * 返回 trim 后的字符串，无该字段或非字符串则返回 undefined
+ */
+export function parseMultipartStringField(
+  fields: Record<string, unknown> | undefined,
+  fieldName: string
+): string | undefined {
+  const raw = getFieldPart(fields, fieldName);
+  if (typeof raw !== "string") return undefined;
+  const trimmed = raw.trim();
+  return trimmed === "" ? undefined : trimmed;
+}
+
+/**
+ * 从 multipart fields 中解析整数字段（如 providerId）
+ * 无该字段、非数字或非整数时返回 undefined
+ */
+export function parseMultipartNumberField(
+  fields: Record<string, unknown> | undefined,
+  fieldName: string
+): number | undefined {
+  const raw = getFieldPart(fields, fieldName);
+  if (typeof raw === "number") {
+    return Number.isInteger(raw) ? raw : undefined;
+  }
+  if (typeof raw === "string") {
+    const n = Number.parseInt(raw.trim(), 10);
+    return Number.isNaN(n) ? undefined : n;
+  }
+  return undefined;
+}
+
+/**
+ * 从 multipart fields 中解析指定字段为 JSON 对象；解析失败或非对象则返回空对象
+ */
+export function parseMultipartMetadata(
+  fields: Record<string, unknown> | undefined,
+  fieldName = "metadata"
+): Record<string, unknown> {
+  const raw = getFieldPart(fields, fieldName);
   if (typeof raw !== "string") return {};
   try {
     const parsed = JSON.parse(raw) as unknown;

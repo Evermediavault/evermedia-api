@@ -69,12 +69,19 @@ export const getPrismaClient = (): PrismaClient => {
 };
 
 /**
- * 断开数据库连接
+ * 仅清空单例引用（与 onClose / disconnectPrisma 配合，避免断开后再次返回旧实例）
+ */
+export const clearPrismaRef = (): void => {
+  prisma = null;
+};
+
+/**
+ * 断开数据库连接并清空引用
  */
 export const disconnectPrisma = async (): Promise<void> => {
   if (prisma) {
     await prisma.$disconnect();
-    prisma = null;
+    clearPrismaRef();
     logger.info("数据库连接已断开");
   }
 };

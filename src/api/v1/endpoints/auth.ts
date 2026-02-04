@@ -25,7 +25,7 @@ export const authRouter: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const uid = request.user?.sub;
       if (!uid) {
-        throw new UnauthorizedError(getMsg(request, "auth.loginRequired", "Please login first"));
+        throw new UnauthorizedError("auth.loginRequired");
       }
       const prisma = getDb();
       const user = await prisma.user.findUnique({
@@ -33,13 +33,13 @@ export const authRouter: FastifyPluginAsync = async (fastify) => {
         select: { uid: true, username: true, email: true, role: true, disabled: true },
       });
       if (!user) {
-        throw new UnauthorizedError(getMsg(request, "auth.userNotFound", "User not found"));
+        throw new UnauthorizedError("auth.userNotFound");
       }
       if (user.disabled) {
-        throw new ForbiddenError(getMsg(request, "auth.userDisabled", "Account is disabled"));
+        throw new ForbiddenError("auth.userDisabled");
       }
       return reply.status(200).send(
-        createSuccessResponse(getMsg(request, "success.list", "Retrieved successfully"), {
+        createSuccessResponse(getMsg(request, "success.list"), {
           user: toAuthUser(user),
         })
       );
@@ -55,9 +55,7 @@ export const authRouter: FastifyPluginAsync = async (fastify) => {
   }>("/admin/login", async (request, reply) => {
     const parsed = LoginBodySchema.safeParse(request.body);
     if (!parsed.success) {
-      throw new BadRequestError(
-        getMsg(request, "auth.loginBodyRequired", "Username and password are required")
-      );
+      throw new BadRequestError("auth.loginBodyRequired");
     }
     const { username, password } = parsed.data;
     const account = username.trim();
@@ -70,21 +68,21 @@ export const authRouter: FastifyPluginAsync = async (fastify) => {
     });
 
     if (!user) {
-      throw new UnauthorizedError(getMsg(request, "auth.invalidCredentials", "Invalid username or password"));
+      throw new UnauthorizedError("auth.invalidCredentials");
     }
 
     if (user.disabled) {
-      throw new ForbiddenError(getMsg(request, "auth.userDisabled", "Account is disabled"));
+      throw new ForbiddenError("auth.userDisabled");
     }
 
     const ok = await verifyPassword(password, user.password);
     if (!ok) {
-      throw new UnauthorizedError(getMsg(request, "auth.invalidCredentials", "Invalid username or password"));
+      throw new UnauthorizedError("auth.invalidCredentials");
     }
 
     const role = (user.role ?? "").toLowerCase();
     if (!ALLOWED_LOGIN_ROLES.includes(role as (typeof ALLOWED_LOGIN_ROLES)[number])) {
-      throw new ForbiddenError(getMsg(request, "auth.permissionDenied", "Permission denied"));
+      throw new ForbiddenError("auth.permissionDenied");
     }
 
     const ip = request.ip ?? null;
@@ -103,7 +101,7 @@ export const authRouter: FastifyPluginAsync = async (fastify) => {
     }));
 
     return reply.status(200).send(
-      createSuccessResponse(getMsg(request, "success.login", "Login successful"), {
+      createSuccessResponse(getMsg(request, "success.login"), {
         token,
         user: toAuthUser(user),
       })
