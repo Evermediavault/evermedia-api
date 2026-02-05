@@ -97,6 +97,8 @@ export default {
       adminCreated: "Default admin account created successfully",
       adminExists: "Default admin account already exists, skipping creation",
       adminCreateFailed: "Failed to create default admin account",
+      defaultCategoryCreated: "Default category created successfully",
+      defaultCategoryExists: "Default category already exists, skipping creation",
       completed: "Database initialization completed",
       failed: "Database initialization failed",
     },
@@ -137,6 +139,14 @@ export default {
     emailInvalid: "Invalid email format",
   },
 
+  // Category
+  category: {
+    notFound: "Category not found",
+    nameExists: "Category name already exists",
+    cannotDeleteDefault: "Default category cannot be deleted",
+    defaultNotFound: "Default category not found, cannot reassign files",
+  },
+
   // Upload / media
   media: {
     fileRequired: "Please select a file to upload",
@@ -149,6 +159,7 @@ export default {
     metadataNameValueRequired: "Metadata name and value must not be empty for each entry",
     providerIdRequired: "Storage provider is required (providerId)",
     providerInvalidOrInactive: "Selected storage provider is invalid or inactive",
+    categoryNotFound: "Selected category not found",
   },
 
   // Log (server-side)

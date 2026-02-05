@@ -107,6 +107,8 @@ export const mediaRouter: FastifyPluginAsync = async (fastify) => {
           storage_id: true,
           storage_info: true,
           uploaded_at: true,
+          category_id: true,
+          category: { select: { uid: true, name: true } },
         },
       }),
       prisma.file.count({ where: { deleted_at: null, permission: "public" } }),
@@ -204,6 +206,19 @@ async function doUpload(request: FastifyRequest, reply: FastifyReply) {
     throw new BadRequestError("media.providerIdRequired");
   }
 
+  const categoryUid = parseMultipartStringField(fields, "categoryUid");
+  let categoryId: number | undefined;
+  if (categoryUid) {
+    const category = await prisma.category.findUnique({
+      where: { uid: categoryUid },
+      select: { id: true },
+    });
+    if (!category) {
+      throw new BadRequestError("media.categoryNotFound");
+    }
+    categoryId = category.id;
+  }
+
   const storageInfo = await synapse.storage.getStorageInfo();
   const provider = storageInfo.providers.find((p) => p.id === providerId);
   if (!provider || !provider.active) {
@@ -268,6 +283,7 @@ async function doUpload(request: FastifyRequest, reply: FastifyReply) {
           synapse_data_set_id: dataSetId ?? undefined,
           storage_id: providerId,
           storage_info: storageInfoJson as object,
+          category_id: categoryId,
         },
       });
     })

@@ -34,6 +34,23 @@ model User {
   @@index([email])
 }
 
+// 分类模型（默认分类 is_default=true 仅一条，不可删除）
+model Category {
+  id          Int      @id @default(autoincrement())
+  uid         String   @unique @default(uuid()) @db.VarChar(36)
+  name        String   @db.VarChar(255)
+  description String?  @db.VarChar(500)
+  is_default  Boolean  @default(false)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  files File[]
+
+  @@map("ev_categories")
+  @@index([uid])
+  @@index([is_default])
+}
+
 // 文件模型（Synapse 上传记录）
 model File {
   id               Int       @id @default(autoincrement())
@@ -49,13 +66,16 @@ model File {
   synapse_data_set_id Int?   // Synapse PDPVerifier data set ID（createContext/upload 后可得）
   storage_id       Int?      // Synapse 批准的 Provider ID（上传时指定）
   storage_info     Json?     // 上传时使用的 Provider 快照（id/name/description/isActive/serviceProvider/pdp.serviceURL）
+  category_id      Int?      // 分类 ID，空则未归类
   uploaded_at      DateTime  @default(now())
   deleted_at       DateTime?
 
-  uploader User @relation(fields: [uploader_id], references: [id], onDelete: Restrict)
+  uploader User     @relation(fields: [uploader_id], references: [id], onDelete: Restrict)
+  category Category? @relation(fields: [category_id], references: [id], onDelete: SetNull)
 
   @@map("ev_files")
   @@index([uploader_id])
+  @@index([category_id])
   @@index([synapse_index_id])
   @@index([storage_id])
   @@index([deleted_at])

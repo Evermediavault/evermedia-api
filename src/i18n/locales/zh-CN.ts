@@ -97,6 +97,8 @@ export default {
       adminCreated: "默认管理员账户创建成功",
       adminExists: "默认管理员账户已存在，跳过创建",
       adminCreateFailed: "创建默认管理员账户失败",
+      defaultCategoryCreated: "默认分类创建成功",
+      defaultCategoryExists: "默认分类已存在，跳过创建",
       completed: "数据库初始化完成",
       failed: "数据库初始化失败",
     },
@@ -137,6 +139,14 @@ export default {
     emailInvalid: "邮箱格式不正确",
   },
 
+  // 分类相关
+  category: {
+    notFound: "分类不存在",
+    nameExists: "分类名称已存在",
+    cannotDeleteDefault: "默认分类不可删除",
+    defaultNotFound: "默认分类不存在，无法迁移文件",
+  },
+
   // 上传/媒体
   media: {
     fileRequired: "请选择要上传的文件",
@@ -149,6 +159,7 @@ export default {
     metadataNameValueRequired: "元数据每条目的名称与值均不能为空",
     providerIdRequired: "请选择存储服务商（providerId 必填）",
     providerInvalidOrInactive: "所选存储服务商无效或未启用",
+    categoryNotFound: "所选分类不存在",
   },
 
   // 日志（服务端）
