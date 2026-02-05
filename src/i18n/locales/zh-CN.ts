@@ -188,6 +188,10 @@ export default {
       initialized: "Synapse 客户端已初始化",
       initFailed: "Synapse 初始化失败",
       disconnected: "Synapse 客户端已断开",
+      notConfigured: "Synapse 未配置（未设置 SYNAPSE_PRIVATE_KEY）",
+      approveSuccess: "存款并批准 Warm Storage 操作成功",
+      approveFailed: "Synapse 批准（存款/授权）失败",
+      walletInfoFailed: "获取 Synapse 钱包信息失败",
     },
   },
 

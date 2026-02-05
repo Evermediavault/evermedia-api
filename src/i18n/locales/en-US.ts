@@ -188,6 +188,10 @@ export default {
       initialized: "Synapse client initialized",
       initFailed: "Synapse initialization failed",
       disconnected: "Synapse client disconnected",
+      notConfigured: "Synapse is not configured (SYNAPSE_PRIVATE_KEY not set)",
+      approveSuccess: "Deposit and Warm Storage operator approval successful",
+      approveFailed: "Synapse approve (deposit/approve) failed",
+      walletInfoFailed: "Failed to get Synapse wallet info",
     },
   },
 

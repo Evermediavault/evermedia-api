@@ -20,8 +20,7 @@
     "prisma:studio": "prisma studio",
     "prisma:push": "prisma db push",
     "prisma:reset": "prisma migrate reset",
-    "type-check": "tsc --noEmit",
-    "synapse:approve": "tsx scripts/synapse-approve.ts"
+    "type-check": "tsc --noEmit"
   },
   "keywords": [
     "api",
