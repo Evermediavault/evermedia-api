@@ -47,7 +47,7 @@ export function sign(
 
   const signOptions: jwt.SignOptions = {
     algorithm: ALGORITHM,
-    expiresIn,
+    expiresIn: expiresIn as jwt.SignOptions["expiresIn"],
   };
   if (options?.issuer) signOptions.issuer = options.issuer;
   if (options?.audience) signOptions.audience = options.audience;

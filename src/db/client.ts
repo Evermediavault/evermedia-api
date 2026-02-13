@@ -49,8 +49,9 @@ export const getPrismaClient = (): PrismaClient => {
     });
 
     // 监听查询事件（仅在启用 DB_ECHO 或开发环境）
+    type QueryEvent = { query: string; params: string; duration: number };
     if (settings.DB_ECHO || !isProduction()) {
-      prisma.$on("query", (e) => {
+      (prisma as { $on(event: "query", cb: (e: QueryEvent) => void): void }).$on("query", (e: QueryEvent) => {
         logger.debug({
           query: e.query,
           params: e.params,
@@ -60,7 +61,7 @@ export const getPrismaClient = (): PrismaClient => {
     }
 
     // 监听错误事件
-    prisma.$on("error", (e) => {
+    (prisma as { $on(event: "error", cb: (e: unknown) => void): void }).$on("error", (e: unknown) => {
       logger.error({ error: e });
     });
   }
