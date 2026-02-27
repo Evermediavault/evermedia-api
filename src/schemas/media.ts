@@ -18,7 +18,7 @@ export const StorageProviderSnapshotSchema = z.object({
   pdp: z.object({ serviceURL: z.string() }),
 });
 
-/** 上传成功返回的单条文件信息（与 UI / 文件列表对齐；列表接口会带 category_uid/category_name） */
+/** 上传成功返回的单条文件信息（与 UI / 文件列表对齐；列表接口会带 category_uid/category_name、uploader_username） */
 export const UploadFileItemSchema = z.object({
   id: z.number(),
   name: z.string(),
@@ -30,6 +30,7 @@ export const UploadFileItemSchema = z.object({
   uploaded_at: z.string(),
   category_uid: z.string().optional(),
   category_name: z.string().optional(),
+  uploader_username: z.string().optional(),
 });
 
 export type UploadFileItem = z.infer<typeof UploadFileItemSchema>;
@@ -38,7 +39,7 @@ export type UploadFileItem = z.infer<typeof UploadFileItemSchema>;
 export const UploadResponseDataSchema = z.array(UploadFileItemSchema);
 export type UploadResponseData = z.infer<typeof UploadResponseDataSchema>;
 
-/** Prisma File 列表/单条与 API 返回格式一致化（含可选分类） */
+/** Prisma File 列表/单条与 API 返回格式一致化（含可选分类、上传者昵称） */
 export function fileToUploadItem(row: {
   id: number;
   name: string;
@@ -49,6 +50,7 @@ export function fileToUploadItem(row: {
   storage_info?: unknown;
   uploaded_at: Date;
   category?: { uid: string; name: string } | null;
+  uploader?: { username: string } | null;
 }): UploadFileItem {
   const item: UploadFileItem = {
     id: row.id,
@@ -63,6 +65,9 @@ export function fileToUploadItem(row: {
   if (row.category) {
     item.category_uid = row.category.uid;
     item.category_name = row.category.name;
+  }
+  if (row.uploader?.username) {
+    item.uploader_username = row.uploader.username;
   }
   return item;
 }

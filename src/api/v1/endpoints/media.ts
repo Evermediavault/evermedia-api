@@ -109,6 +109,7 @@ export const mediaRouter: FastifyPluginAsync = async (fastify) => {
           uploaded_at: true,
           category_id: true,
           category: { select: { uid: true, name: true } },
+          uploader: { select: { username: true } },
         },
       }),
       prisma.file.count({ where: { deleted_at: null, permission: "public" } }),
