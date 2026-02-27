@@ -137,6 +137,7 @@ export default {
     emailExists: "邮箱已被使用",
     passwordRequired: "密码不能为空",
     emailInvalid: "邮箱格式不正确",
+    cannotDisablePrimary: "禁止禁用主管理员账户（id=1）",
   },
 
   // 分类相关

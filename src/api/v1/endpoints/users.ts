@@ -9,7 +9,7 @@ import {
 } from "../../../schemas/response.js";
 import { getMsg } from "../../../i18n/utils.js";
 import { getPasswordHash } from "../../../core/security.js";
-import { BadRequestError, NotFoundError, ConflictError } from "../../../core/exceptions.js";
+import { BadRequestError, NotFoundError, ConflictError, ForbiddenError } from "../../../core/exceptions.js";
 import type { PrismaClient } from "@prisma/client";
 import {
   UserListQuerySchema,
@@ -162,6 +162,9 @@ export const usersRouter: FastifyPluginAsync = async (fastify) => {
       const existing = await prisma.user.findUnique({ where: { uid }, select: { id: true } });
       if (!existing) {
         throw new NotFoundError("user.notFound");
+      }
+      if (disabled === true && existing.id === 1) {
+        throw new ForbiddenError("user.cannotDisablePrimary");
       }
       const updated = await prisma.user.update({
         where: { uid },

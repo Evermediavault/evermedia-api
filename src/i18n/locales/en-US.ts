@@ -137,6 +137,7 @@ export default {
     emailExists: "Email already in use",
     passwordRequired: "Password is required",
     emailInvalid: "Invalid email format",
+    cannotDisablePrimary: "Cannot disable the primary admin account (id=1)",
   },
 
   // Category
