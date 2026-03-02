@@ -1,13 +1,13 @@
 /**
  * 媒体路由
  * GET  /media/list：获取文件列表（不鉴权）
- * POST /media/upload：上传（仅管理员），multipart 必填 1～N 个 file、providerId，可选 metadata、name（显示名）
+ * POST /media/upload：上传（管理员/上传者/联盟成员），multipart 必填 1～N 个 file、providerId，可选 metadata、name（显示名）
  *   - 单次请求内 1 或 N 个文件归属同一 data set（一次 createContext + Promise.all(upload)）
  */
 import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from "fastify";
 import { getPrismaClient } from "../../../db/client.js";
 import { getSynapse } from "../../../synapse/client.js";
-import { authToken, requireAuth, requireAdmin } from "../../../middleware/auth.js";
+import { authToken, requireAuth, requireRoles } from "../../../middleware/auth.js";
 import { createSuccessResponse, createPaginatedResponse, createPaginationMeta } from "../../../schemas/response.js";
 import { MediaListQuerySchema, fileToUploadItem } from "../../../schemas/media.js";
 import { getMsg } from "../../../i18n/utils.js";
@@ -25,6 +25,13 @@ import { getLogger } from "../../../core/logger.js";
 import { BaseAPIException, UnauthorizedError, BadRequestError } from "../../../core/exceptions.js";
 
 const log = getLogger("media");
+
+/** storage-info 内存缓存，避免每次打开上传页都请求 Synapse（getStorageInfo 较慢） */
+const STORAGE_INFO_CACHE_TTL_MS = 60_000; // 60s
+let storageInfoCache: {
+  providers: ReturnType<typeof serializeProviderInfo>[];
+  expiresAt: number;
+} | null = null;
 
 /** 将 SDK ProviderInfo 序列化为可落库/返回前端的 JSON 快照（无 bigint） */
 function serializeProviderInfo(provider: {
@@ -66,15 +73,22 @@ function isFileTooLargeError(err: unknown): err is { code: string } {
 export const mediaRouter: FastifyPluginAsync = async (fastify) => {
   /**
    * GET /storage-info
-   * 不鉴权；返回 Synapse 批准的存储 Provider 列表，供上传前选择 providerId
+   * 不鉴权；返回 Synapse 批准的存储 Provider 列表，供上传前选择 providerId。
+   * 结果缓存 60s，减轻 Synapse 调用带来的卡顿。
    */
   fastify.get("/storage-info", async (request, reply) => {
+    const now = Date.now();
+    if (storageInfoCache != null && storageInfoCache.expiresAt > now) {
+      const message = getMsg(request, "success.list");
+      return reply.send(createSuccessResponse(message, { providers: storageInfoCache.providers }));
+    }
     const synapse = await getSynapse();
     if (!synapse) {
       throw new BaseAPIException("media.storageUnavailable", 503);
     }
     const storageInfo = await synapse.storage.getStorageInfo();
     const providers = storageInfo.providers.map((p) => serializeProviderInfo(p));
+    storageInfoCache = { providers, expiresAt: now + STORAGE_INFO_CACHE_TTL_MS };
     const message = getMsg(request, "success.list");
     return reply.send(createSuccessResponse(message, { providers }));
   });
@@ -121,14 +135,14 @@ export const mediaRouter: FastifyPluginAsync = async (fastify) => {
 
   /**
    * POST /upload
-   * 仅管理员；multipart 必填 1～N 个 file、providerId；可选 metadata（JSON 字符串）、每文件 name（显示名）
+   * 管理员、上传者、联盟成员可上传；multipart 必填 1～N 个 file、providerId；可选 metadata、每文件 name
    * 单次请求内所有文件归属同一 Synapse data set（一次 createContext + Promise.all(upload)）
    */
   fastify.post<{
     Body: unknown;
   }>(
     "/upload",
-    { preHandler: [authToken, requireAuth, requireAdmin] },
+    { preHandler: [authToken, requireAuth, requireRoles(["admin", "uploader", "alliance_member"])] },
     async (request, reply) => doUpload(request, reply)
   );
 };

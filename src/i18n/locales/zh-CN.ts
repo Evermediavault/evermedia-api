@@ -46,6 +46,9 @@ export default {
     positive: "请输入正数",
     negative: "请输入负数",
     range: "数值必须在 {min} 到 {max} 之间",
+    allianceMemberFieldsRequired: "角色为联盟成员时，logo、项目名称均为必填",
+    logoMustHttps: "logo 须为可访问的 https 链接",
+    websiteMustHttps: "官网须为 https 链接",
   },
 
   // 健康检查

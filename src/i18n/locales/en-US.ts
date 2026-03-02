@@ -46,6 +46,9 @@ export default {
     positive: "Please enter a positive number",
     negative: "Please enter a negative number",
     range: "Value must be between {min} and {max}",
+    allianceMemberFieldsRequired: "When role is Alliance Member, logo and project name are required",
+    logoMustHttps: "Logo must be an accessible https URL",
+    websiteMustHttps: "Website must be an https URL",
   },
 
   // Health check

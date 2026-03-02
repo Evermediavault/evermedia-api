@@ -26,12 +26,28 @@ model User {
   created_at    DateTime  @default(now())
   updated_at    DateTime  @updatedAt
 
-  files File[]
+  files   File[]
+  userMeta UserMeta[]
 
   @@map("ev_users")
   @@index([uid])
   @@index([username])
   @@index([email])
+}
+
+// 用户元数据（扩展字段，key-value）
+model UserMeta {
+  id         Int      @id @default(autoincrement())
+  user_id    Int      // 用户主键 id
+  meta_key   String   @db.VarChar(255)
+  meta_value String   @db.Text
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, meta_key])
+  @@map("ev_user_meta")
+  @@index([user_id])
+  @@index([meta_key])
 }
 
 // 分类模型（默认分类 is_default=true 仅一条，不可删除）

@@ -8,8 +8,8 @@ import { sign, payloadFromUser } from "../../../utils/jwt.js";
 import { authToken, requireAuth } from "../../../middleware/auth.js";
 import { UnauthorizedError, ForbiddenError, BadRequestError } from "../../../core/exceptions.js";
 
-/** 允许登录后台的角色（admin、uploader） */
-const ALLOWED_LOGIN_ROLES = ["admin", "uploader"] as const;
+/** 允许登录后台的角色（admin、uploader、alliance_member，后两者权限一致） */
+const ALLOWED_LOGIN_ROLES = ["admin", "uploader", "alliance_member"] as const;
 
 /**
  * 登录相关路由
