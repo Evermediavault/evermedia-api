@@ -1,4 +1,4 @@
-import { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from "fastify";
 import { z } from "zod";
 import { getPrismaClient } from "../../../db/client.js";
 import { authToken, requireAuth, requireAdmin } from "../../../middleware/auth.js";
@@ -65,6 +65,106 @@ async function upsertAllianceMeta(
 
 async function clearAllianceMeta(prisma: PrismaClient, userId: number): Promise<void> {
   await prisma.userMeta.deleteMany({ where: { user_id: userId, meta_key: { in: [...ALLIANCE_META_KEYS] } } });
+}
+
+/** 创建用户：无 user_id，用户名邮箱唯一，可选联盟元数据 */
+async function createUserHandler(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  data: CreateOrUpdateUserBody & { user_id?: undefined; password: string }
+) {
+  const { username, email, password, role, logo, project_name, intro, website, twitter } = data;
+  const prisma = getPrismaClient();
+  await assertUserUnique(prisma, { username, email });
+  const hashedPassword = await getPasswordHash(password);
+  const created = await prisma.user.create({
+    data: { username, email, password: hashedPassword, role },
+    select: { id: true, uid: true, username: true, email: true, role: true, disabled: true, created_at: true },
+  });
+  if (role === "alliance_member" && logo != null && project_name != null) {
+    const allianceMeta = { logo, project_name, intro: intro ?? "", website: website ?? "", twitter: twitter ?? "" };
+    await upsertAllianceMeta(prisma, created.id, allianceMeta);
+  }
+  const alliance_meta =
+    role === "alliance_member" && logo != null && project_name != null
+      ? { logo, project_name, intro: intro ?? "", website: website ?? "", twitter: twitter ?? "" }
+      : undefined;
+  const message = getMsg(request, "user.created");
+  return reply.status(201).send(
+    createSuccessResponse(message, {
+      user: {
+        uid: created.uid,
+        username: created.username,
+        email: created.email,
+        role: created.role,
+        disabled: created.disabled,
+        created_at: created.created_at,
+        ...(alliance_meta ? { alliance_meta } : {}),
+      },
+    })
+  );
+}
+
+/** 更新用户：传 user_id，用户名邮箱唯一，可选联盟元数据 */
+async function updateUserHandler(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  data: CreateOrUpdateUserBody & { user_id: string }
+) {
+  const { user_id, username, email, password, role, logo, project_name, intro, website, twitter } = data;
+  const prisma = getPrismaClient();
+  const existing = await prisma.user.findUnique({ where: { uid: user_id } });
+  if (!existing) {
+    throw new NotFoundError("user.notFound");
+  }
+  await assertUserUnique(prisma, { username, email }, existing.id);
+  const updateData: { username: string; email: string; role: string; password?: string } = {
+    username,
+    email,
+    role,
+  };
+  if (password != null && password.length > 0) {
+    updateData.password = await getPasswordHash(password);
+  }
+  const updated = await prisma.user.update({
+    where: { uid: user_id },
+    data: updateData,
+    select: { id: true, uid: true, username: true, email: true, role: true, disabled: true, created_at: true },
+  });
+  if (role === "alliance_member" && logo != null && project_name != null) {
+    const allianceMeta = { logo, project_name, intro: intro ?? "", website: website ?? "", twitter: twitter ?? "" };
+    await upsertAllianceMeta(prisma, updated.id, allianceMeta);
+    const message = getMsg(request, "user.updated");
+    return reply.status(200).send(
+      createSuccessResponse(message, {
+        user: {
+          uid: updated.uid,
+          username: updated.username,
+          email: updated.email,
+          role: updated.role,
+          disabled: updated.disabled,
+          created_at: updated.created_at,
+          alliance_meta: allianceMeta,
+        },
+      })
+    );
+  }
+  if (role !== "alliance_member") {
+    await clearAllianceMeta(prisma, updated.id);
+  }
+  const message = getMsg(request, "user.updated");
+  return reply.status(200).send(
+    createSuccessResponse(message, {
+      user: {
+        uid: updated.uid,
+        username: updated.username,
+        email: updated.email,
+        role: updated.role,
+        disabled: updated.disabled,
+        created_at: updated.created_at,
+      },
+    })
+  );
 }
 
 /** 用户管理路由（仅管理员） */
@@ -139,77 +239,14 @@ export const usersRouter: FastifyPluginAsync = async (fastify) => {
       if (!parsed.success) {
         throw new BadRequestError("validation.invalidParams", parsed.error.flatten());
       }
-      const { user_id, username, email, password, role, logo, project_name, intro, website, twitter } = parsed.data;
-      const prisma = getPrismaClient();
-
-      if (user_id) {
-        const existing = await prisma.user.findUnique({ where: { uid: user_id } });
-        if (!existing) {
-          throw new NotFoundError("user.notFound");
-        }
-        await assertUserUnique(prisma, { username, email }, existing.id);
-        const updateData: { username: string; email: string; role: string; password?: string } = {
-          username,
-          email,
-          role,
-        };
-        if (password != null && password.length > 0) {
-          updateData.password = await getPasswordHash(password);
-        }
-        const updated = await prisma.user.update({
-          where: { uid: user_id },
-          data: updateData,
-          select: { id: true, uid: true, username: true, email: true, role: true, disabled: true, created_at: true },
-        });
-        if (role === "alliance_member" && logo != null && project_name != null) {
-          const allianceMeta = { logo, project_name, intro: intro ?? "", website: website ?? "", twitter: twitter ?? "" };
-          await upsertAllianceMeta(prisma, updated.id, allianceMeta);
-          const message = getMsg(request, "user.updated");
-          return reply.status(200).send(
-            createSuccessResponse(message, {
-              user: {
-                uid: updated.uid,
-                username: updated.username,
-                email: updated.email,
-                role: updated.role,
-                disabled: updated.disabled,
-                created_at: updated.created_at,
-                alliance_meta: allianceMeta,
-              },
-            })
-          );
-        }
-        if (role !== "alliance_member") {
-          await clearAllianceMeta(prisma, updated.id);
-        }
-        const message = getMsg(request, "user.updated");
-        return reply.status(200).send(
-          createSuccessResponse(message, {
-            user: { uid: updated.uid, username: updated.username, email: updated.email, role: updated.role, disabled: updated.disabled, created_at: updated.created_at },
-          })
-        );
+      const data = parsed.data;
+      if (data.user_id) {
+        return updateUserHandler(request, reply, data as CreateOrUpdateUserBody & { user_id: string });
       }
-
-      await assertUserUnique(prisma, { username, email });
-      const hashedPassword = await getPasswordHash(password!);
-      const created = await prisma.user.create({
-        data: { username, email, password: hashedPassword, role },
-        select: { id: true, uid: true, username: true, email: true, role: true, disabled: true, created_at: true },
-      });
-      if (role === "alliance_member" && logo != null && project_name != null) {
-        const allianceMeta = { logo, project_name, intro: intro ?? "", website: website ?? "", twitter: twitter ?? "" };
-        await upsertAllianceMeta(prisma, created.id, allianceMeta);
+      if (data.password == null || data.password.length === 0) {
+        throw new BadRequestError("validation.invalidParams");
       }
-      const alliance_meta =
-        role === "alliance_member" && logo != null && project_name != null
-          ? { logo, project_name, intro: intro ?? "", website: website ?? "", twitter: twitter ?? "" }
-          : undefined;
-      const message = getMsg(request, "user.created");
-      return reply.status(201).send(
-        createSuccessResponse(message, {
-          user: { uid: created.uid, username: created.username, email: created.email, role: created.role, disabled: created.disabled, created_at: created.created_at, ...(alliance_meta ? { alliance_meta } : {}) },
-        })
-      );
+      return createUserHandler(request, reply, data as CreateOrUpdateUserBody & { user_id?: undefined; password: string });
     }
   );
 

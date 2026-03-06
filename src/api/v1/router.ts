@@ -6,6 +6,7 @@ import { mediaRouter } from "./endpoints/media.js";
 import { categoriesRouter } from "./endpoints/categories.js";
 import { statsRouter } from "./endpoints/stats.js";
 import { synapseRouter } from "./endpoints/synapse.js";
+import { allianceRouter } from "./endpoints/alliance.js";
 
 /**
  * API v1 路由聚合
@@ -20,4 +21,5 @@ export const apiV1Router: FastifyPluginAsync = async (fastify) => {
   await fastify.register(categoriesRouter, { prefix: "/categories" });
   await fastify.register(statsRouter, { prefix: "/stats" });
   await fastify.register(synapseRouter, { prefix: "/synapse" });
+  await fastify.register(allianceRouter, { prefix: "/alliance" });
 };

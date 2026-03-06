@@ -70,6 +70,212 @@ function isFileTooLargeError(err: unknown): err is { code: string } {
   );
 }
 
+/** 解析并校验后的上传请求（文件列表、字段、默认元数据、是否索引格式） */
+interface ParsedUploadRequest {
+  fields: Record<string, unknown>;
+  files: CollectedFilePart[];
+  defaultMetadataJson: object;
+  isIndexedFormat: boolean;
+}
+
+/** 解析 multipart、校验文件数量/大小/MIME，返回字段与默认元数据 */
+async function parseAndValidateUploadRequest(
+  request: FastifyRequest
+): Promise<ParsedUploadRequest> {
+  let fields: Record<string, unknown>;
+  let files: CollectedFilePart[];
+
+  try {
+    const collected = await collectPartsFromMultipart(request.parts());
+    fields = collected.fields;
+    files = collected.files;
+  } catch (err) {
+    if (isFileTooLargeError(err)) {
+      throw new BadRequestError(
+        getMsg(request, "media.fileTooLarge", { max: settings.UPLOAD_MAX_FILE_SIZE_KB })
+      );
+    }
+    throw err;
+  }
+
+  if (files.length === 0) {
+    throw new BadRequestError("media.fileRequired");
+  }
+  if (files.length > settings.UPLOAD_MAX_FILES) {
+    throw new BadRequestError(
+      getMsg(request, "media.fileCountExceeded", { max: settings.UPLOAD_MAX_FILES })
+    );
+  }
+
+  const maxSizeBytes = settings.UPLOAD_MAX_FILE_SIZE_KB * 1024;
+  for (let i = 0; i < files.length; i++) {
+    if (files[i].buffer.length > maxSizeBytes) {
+      throw new BadRequestError(
+        getMsg(request, "media.fileTooLarge", { max: settings.UPLOAD_MAX_FILE_SIZE_KB })
+      );
+    }
+    const mime = files[i].mimetype.trim();
+    if (!isAllowedMime(mime)) {
+      throw new BadRequestError("media.fileTypeNotAllowed");
+    }
+  }
+
+  const isIndexedFormat = "name_0" in fields || "metadata_0" in fields;
+  const defaultMetadata = parseMultipartMetadata(fields);
+  let defaultNormalized: { groups: { name: string; type: string; value: string }[] } = { groups: [] };
+  try {
+    defaultNormalized = normalizeMetadataGroups(defaultMetadata);
+  } catch {
+    if (!isIndexedFormat) {
+      throw new BadRequestError("media.metadataNameValueRequired");
+    }
+  }
+  const defaultMetadataJson =
+    defaultNormalized.groups.length > 0 ? { groups: defaultNormalized.groups } : {};
+
+  return { fields, files, defaultMetadataJson, isIndexedFormat };
+}
+
+/** 解析后的用户、provider、分类、存储快照 */
+interface ResolvedUploadContext {
+  userId: number;
+  providerId: number;
+  categoryId: number | undefined;
+  storageInfoJson: ReturnType<typeof serializeProviderInfo>;
+}
+
+/** 解析 providerId/categoryUid，校验用户与 provider */
+async function resolveUserAndCategory(
+  request: FastifyRequest,
+  fields: Record<string, unknown>
+): Promise<ResolvedUploadContext> {
+  const uid = request.user!.sub;
+  const prisma = getPrismaClient();
+
+  const user = await prisma.user.findUnique({
+    where: { uid },
+    select: { id: true },
+  });
+  if (!user) {
+    throw new UnauthorizedError("auth.userNotFound");
+  }
+
+  const providerId = parseMultipartNumberField(fields, "providerId");
+  if (providerId === undefined || providerId === null) {
+    throw new BadRequestError("media.providerIdRequired");
+  }
+
+  const categoryUid = parseMultipartStringField(fields, "categoryUid");
+  let categoryId: number | undefined;
+  if (categoryUid) {
+    const category = await prisma.category.findUnique({
+      where: { uid: categoryUid },
+      select: { id: true },
+    });
+    if (!category) {
+      throw new BadRequestError("media.categoryNotFound");
+    }
+    categoryId = category.id;
+  }
+
+  const synapse = await getSynapse();
+  if (!synapse) {
+    throw new BaseAPIException("media.storageUnavailable", 503);
+  }
+  const storageInfo = await synapse.storage.getStorageInfo();
+  const provider = storageInfo.providers.find((p) => p.id === providerId);
+  if (!provider || !provider.active) {
+    throw new BadRequestError("media.providerInvalidOrInactive");
+  }
+  const storageInfoJson = serializeProviderInfo(provider);
+
+  return {
+    userId: user.id,
+    providerId,
+    categoryId,
+    storageInfoJson,
+  };
+}
+
+/** 上传到 Synapse 并落库，返回创建的 File 记录 */
+async function uploadToSynapseAndPersist(
+  request: FastifyRequest,
+  parsed: ParsedUploadRequest,
+  resolved: ResolvedUploadContext
+) {
+  const synapse = await getSynapse();
+  if (!synapse) {
+    throw new BaseAPIException("media.storageUnavailable", 503);
+  }
+
+  const { fields, files, defaultMetadataJson, isIndexedFormat } = parsed;
+  const { userId, providerId, categoryId, storageInfoJson } = resolved;
+
+  let dataSetId: number | undefined;
+  let results: { pieceCid: unknown; size?: number; pieceId?: number }[];
+
+  try {
+    const ctx = await synapse.storage.createContext({
+      providerId,
+      forceCreateDataSet: settings.SYNAPSE_FORCE_CREATE_DATA_SET,
+    });
+    results = await Promise.all(
+      files.map((f) => ctx.upload(new Uint8Array(f.buffer), { metadata: {} }))
+    );
+    dataSetId = ctx.dataSetId;
+  } catch (err) {
+    const errMsg = toErrorMessage(err);
+    const causeMsg = err instanceof Error && err.cause instanceof Error ? err.cause.message : null;
+    log.error(
+      { err, message: "Synapse upload failed", reason: errMsg, cause: causeMsg, fileCount: files.length },
+      "Synapse upload failed"
+    );
+    const msg = getMsg(request, "media.uploadFailed");
+    const detail = { reason: errMsg, cause: causeMsg ?? undefined };
+    throw new BaseAPIException(msg, 502, detail);
+  }
+
+  const prisma = getPrismaClient();
+  const created = await Promise.all(
+    files.map((f, i) => {
+      const customName = isIndexedFormat
+        ? parseMultipartStringField(fields, `name_${i}`)
+        : parseMultipartStringField(f.fields, "name");
+      const filename =
+        (customName !== undefined ? customName.slice(0, 255) : (f.filename ?? "unknown").slice(0, 255));
+      let fileMetadata: object = defaultMetadataJson as object;
+      if (isIndexedFormat) {
+        const raw = parseMultipartMetadata(fields, `metadata_${i}`);
+        try {
+          const norm = normalizeMetadataGroups(raw);
+          fileMetadata = norm.groups.length > 0 ? { groups: norm.groups } : {};
+        } catch {
+          fileMetadata = {};
+        }
+      }
+      const pieceCid = results[i].pieceCid;
+      const synapseIndexId = typeof pieceCid === "string" ? pieceCid : String(pieceCid);
+      return prisma.file.create({
+        data: {
+          name: filename,
+          file_type: f.mimetype.trim().slice(0, 128),
+          metadata: fileMetadata,
+          uploader_id: userId,
+          permission: "public",
+          cost: 0,
+          synapse_index_id: synapseIndexId,
+          synapse_data_set_id: dataSetId ?? undefined,
+          storage_id: providerId,
+          storage_info: storageInfoJson as object,
+          category_id: categoryId,
+        },
+      });
+    })
+  );
+
+  return created;
+}
+
 export const mediaRouter: FastifyPluginAsync = async (fastify) => {
   /**
    * GET /storage-info
@@ -148,162 +354,10 @@ export const mediaRouter: FastifyPluginAsync = async (fastify) => {
 };
 
 async function doUpload(request: FastifyRequest, reply: FastifyReply) {
-  const uid = request.user!.sub;
-
-  const synapse = await getSynapse();
-  if (!synapse) {
-    throw new BaseAPIException("media.storageUnavailable", 503);
-  }
-
-  let fields: Record<string, unknown>;
-  let files: CollectedFilePart[];
-
-  try {
-    const collected = await collectPartsFromMultipart(request.parts());
-    fields = collected.fields;
-    files = collected.files;
-  } catch (err) {
-    if (isFileTooLargeError(err)) {
-      throw new BadRequestError(
-        getMsg(request, "media.fileTooLarge", { max: settings.UPLOAD_MAX_FILE_SIZE_KB })
-      );
-    }
-    throw err;
-  }
-
-  if (files.length === 0) {
-    throw new BadRequestError("media.fileRequired");
-  }
-  if (files.length > settings.UPLOAD_MAX_FILES) {
-    throw new BadRequestError(
-      getMsg(request, "media.fileCountExceeded", { max: settings.UPLOAD_MAX_FILES })
-    );
-  }
-
-  const maxSizeBytes = settings.UPLOAD_MAX_FILE_SIZE_KB * 1024;
-  for (let i = 0; i < files.length; i++) {
-    if (files[i].buffer.length > maxSizeBytes) {
-      throw new BadRequestError(
-        getMsg(request, "media.fileTooLarge", { max: settings.UPLOAD_MAX_FILE_SIZE_KB })
-      );
-    }
-    const mime = files[i].mimetype.trim();
-    if (!isAllowedMime(mime)) {
-      throw new BadRequestError("media.fileTypeNotAllowed");
-    }
-  }
-
-  /** 是否为索引格式（file_0, name_0, metadata_0）：每文件独立 name/metadata */
-  const isIndexedFormat = "name_0" in fields || "metadata_0" in fields;
-  const defaultMetadata = parseMultipartMetadata(fields);
-  let defaultNormalized: { groups: { name: string; type: string; value: string }[] } = { groups: [] };
-  try {
-    defaultNormalized = normalizeMetadataGroups(defaultMetadata);
-  } catch {
-    if (!isIndexedFormat) {
-      throw new BadRequestError("media.metadataNameValueRequired");
-    }
-  }
-  const defaultMetadataJson =
-    defaultNormalized.groups.length > 0 ? { groups: defaultNormalized.groups } : {};
-
-  const prisma = getPrismaClient();
-  const user = await prisma.user.findUnique({
-    where: { uid },
-    select: { id: true },
-  });
-  if (!user) {
-    throw new UnauthorizedError("auth.userNotFound");
-  }
-
-  const providerId = parseMultipartNumberField(fields, "providerId");
-  if (providerId === undefined || providerId === null) {
-    throw new BadRequestError("media.providerIdRequired");
-  }
-
-  const categoryUid = parseMultipartStringField(fields, "categoryUid");
-  let categoryId: number | undefined;
-  if (categoryUid) {
-    const category = await prisma.category.findUnique({
-      where: { uid: categoryUid },
-      select: { id: true },
-    });
-    if (!category) {
-      throw new BadRequestError("media.categoryNotFound");
-    }
-    categoryId = category.id;
-  }
-
-  const storageInfo = await synapse.storage.getStorageInfo();
-  const provider = storageInfo.providers.find((p) => p.id === providerId);
-  if (!provider || !provider.active) {
-    throw new BadRequestError("media.providerInvalidOrInactive");
-  }
-  const storageInfoJson = serializeProviderInfo(provider);
-
-  let dataSetIdForBatch: number | undefined;
-  let results: { pieceCid: unknown; size?: number; pieceId?: number }[];
-
-  try {
-    const ctx = await synapse.storage.createContext({
-      providerId,
-      forceCreateDataSet: settings.SYNAPSE_FORCE_CREATE_DATA_SET,
-    });
-    results = await Promise.all(
-      files.map((f) => ctx.upload(new Uint8Array(f.buffer), { metadata: {} }))
-    );
-    dataSetIdForBatch = ctx.dataSetId;
-  } catch (err) {
-    const errMsg = toErrorMessage(err);
-    const causeMsg = err instanceof Error && err.cause instanceof Error ? err.cause.message : null;
-    log.error(
-      { err, message: "Synapse upload failed", reason: errMsg, cause: causeMsg, fileCount: files.length },
-      "Synapse upload failed"
-    );
-    const msg = getMsg(request, "media.uploadFailed");
-    const detail = { reason: errMsg, cause: causeMsg ?? undefined };
-    throw new BaseAPIException(msg, 502, detail);
-  }
-
-  const dataSetId = dataSetIdForBatch;
-
-  const created = await Promise.all(
-    files.map((f, i) => {
-      const customName = isIndexedFormat
-        ? parseMultipartStringField(fields, `name_${i}`)
-        : parseMultipartStringField(f.fields, "name");
-      const filename =
-        (customName !== undefined ? customName.slice(0, 255) : (f.filename ?? "unknown").slice(0, 255));
-      let fileMetadata: object = defaultMetadataJson as object;
-      if (isIndexedFormat) {
-        const raw = parseMultipartMetadata(fields, `metadata_${i}`);
-        try {
-          const norm = normalizeMetadataGroups(raw);
-          fileMetadata = norm.groups.length > 0 ? { groups: norm.groups } : {};
-        } catch {
-          fileMetadata = {};
-        }
-      }
-      const pieceCid = results[i].pieceCid;
-      const synapseIndexId = typeof pieceCid === "string" ? pieceCid : String(pieceCid);
-      return prisma.file.create({
-        data: {
-          name: filename,
-          file_type: f.mimetype.trim().slice(0, 128),
-          metadata: fileMetadata,
-          uploader_id: user.id,
-          permission: "public",
-          cost: 0,
-          synapse_index_id: synapseIndexId,
-          synapse_data_set_id: dataSetId ?? undefined,
-          storage_id: providerId,
-          storage_info: storageInfoJson as object,
-          category_id: categoryId,
-        },
-      });
-    })
-  );
-
+  const parsed = await parseAndValidateUploadRequest(request);
+  const resolved = await resolveUserAndCategory(request, parsed.fields);
+  const created = await uploadToSynapseAndPersist(request, parsed, resolved);
+  storageInfoCache = null;
   const message = getMsg(request, "success.created");
   return reply.status(201).send(createSuccessResponse(message, created.map((f) => fileToUploadItem(f))));
 }

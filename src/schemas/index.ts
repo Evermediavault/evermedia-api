@@ -1,3 +1,4 @@
+export * from "./alliance.js";
 export * from "./auth.js";
 export * from "./category.js";
 export * from "./media.js";
