@@ -1,5 +1,15 @@
 import { z } from "zod";
 
+/** 去掉首尾空白；若为空则视为未传（undefined） */
+function trimTagOptional(max: number) {
+  return z.preprocess((v) => {
+    if (v === undefined || v === null) return undefined;
+    if (typeof v !== "string") return v;
+    const t = v.trim();
+    return t.length === 0 ? undefined : t;
+  }, z.string().max(max).optional());
+}
+
 /** 合作伙伴单项（API 响应） */
 export interface PartnerItem {
   id: number;
@@ -17,7 +27,7 @@ export const UpsertPartnerBodySchema = z
   .object({
     id: z.number().int().positive().optional(),
     logo: z.string().min(1),
-    tag: z.string().max(128).optional(),
+    tag: trimTagOptional(128),
     name: z.string().min(1).max(255),
     description: z.string().max(500).optional(),
     link: z.string().min(1),
@@ -49,7 +59,7 @@ export type UpsertPartnerBody = z.infer<typeof UpsertPartnerBodySchema>;
 
 /** 公开列表查询（可选按 tag 精确筛选） */
 export const PartnerPublicListQuerySchema = z.object({
-  tag: z.string().max(128).optional(),
+  tag: trimTagOptional(128),
 });
 
 export type PartnerPublicListQuery = z.infer<typeof PartnerPublicListQuerySchema>;

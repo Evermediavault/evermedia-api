@@ -1,4 +1,8 @@
-import Fastify, { FastifyInstance } from "fastify";
+import Fastify, {
+  type FastifyInstance,
+  type FastifyReply,
+  type FastifyRequest,
+} from "fastify";
 import compress from "@fastify/compress";
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
@@ -12,9 +16,23 @@ import { loggingPlugin } from "./middleware/logging.js";
 import { errorHandler } from "./middleware/exception.js";
 import { apiV1Router } from "./api/v1/router.js";
 import { t, type Locale } from "./i18n/index.js";
+import { getMsg } from "./i18n/utils.js";
+import { createErrorResponse } from "./schemas/response.js";
 
 const logger = getLogger("app");
 const logLocale = (): Locale => settings.DEFAULT_LOCALE as Locale;
+
+/** 404 等无匹配路由时补 CORS（与 errorHandler 一致，避免错误响应缺头） */
+function setCorsHeadersForErrorPath(request: FastifyRequest, reply: FastifyReply): void {
+  const origin = request.headers.origin;
+  reply.header("Access-Control-Allow-Origin", origin || "*");
+  reply.header("Access-Control-Allow-Credentials", "true");
+  reply.header(
+    "Access-Control-Allow-Methods",
+    "GET,POST,PUT,PATCH,DELETE,OPTIONS,HEAD"
+  );
+  reply.header("Access-Control-Allow-Headers", "*");
+}
 
 /**
  * 创建 Fastify 应用实例
@@ -66,6 +84,15 @@ export const createApplication = async (): Promise<FastifyInstance> => {
       version: settings.APP_VERSION,
       docs_url: isProduction() ? null : settings.API_DOCS_URL,
     };
+  });
+
+  /**
+   * 未匹配路由：统一为项目错误信封，不暴露 Fastify 默认 `Route GET:... not found` 文案。
+   */
+  app.setNotFoundHandler((request, reply) => {
+    setCorsHeadersForErrorPath(request, reply);
+    const message = getMsg(request, "error.notFound");
+    return reply.status(404).send(createErrorResponse(message, 404));
   });
 
   // 应用生命周期钩子

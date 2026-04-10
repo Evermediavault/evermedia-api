@@ -93,7 +93,7 @@ export type PaginatedResponse<T> = {
 };
 
 /**
- * 创建成功响应
+ * 创建成功响应（通用；`data` 可为对象、单条资源等）
  */
 export const createSuccessResponse = <T>(
   message: string,
@@ -107,17 +107,31 @@ export const createSuccessResponse = <T>(
 };
 
 /**
- * 创建分页成功响应
+ * 列表类成功响应：`data` 始终为数组，无数据时为 `[]`（不省略、不用 null），与分页列表语义一致。
+ */
+export const createArraySuccessResponse = <T>(
+  message: string,
+  items?: T[] | null
+): SuccessResponse<T[]> => {
+  return {
+    success: true,
+    message,
+    data: items ?? [],
+  };
+};
+
+/**
+ * 创建分页成功响应；`data` 统一为数组，缺省按空数组处理。
  */
 export const createPaginatedResponse = <T>(
   message: string,
-  data: T[],
+  data: T[] | null | undefined,
   meta: PaginationMeta
 ): PaginatedResponse<T> => {
   return {
     success: true,
     message,
-    data,
+    data: data ?? [],
     meta,
   };
 };

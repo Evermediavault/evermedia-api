@@ -286,14 +286,18 @@ export const mediaRouter: FastifyPluginAsync = async (fastify) => {
     const now = Date.now();
     if (storageInfoCache != null && storageInfoCache.expiresAt > now) {
       const message = getMsg(request, "success.list");
-      return reply.send(createSuccessResponse(message, { providers: storageInfoCache.providers }));
+      return reply.send(
+        createSuccessResponse(message, {
+          providers: storageInfoCache.providers ?? [],
+        })
+      );
     }
     const synapse = await getSynapse();
     if (!synapse) {
       throw new BaseAPIException("media.storageUnavailable", 503);
     }
     const storageInfo = await synapse.storage.getStorageInfo();
-    const providers = storageInfo.providers.map((p) => serializeProviderInfo(p));
+    const providers = (storageInfo.providers ?? []).map((p) => serializeProviderInfo(p));
     storageInfoCache = { providers, expiresAt: now + STORAGE_INFO_CACHE_TTL_MS };
     const message = getMsg(request, "success.list");
     return reply.send(createSuccessResponse(message, { providers }));

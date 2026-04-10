@@ -12,6 +12,7 @@ import { getPrismaClient } from "../../../db/client.js";
 import { settings } from "../../../core/config.js";
 import { authToken, requireAuth, requireAdmin } from "../../../middleware/auth.js";
 import {
+  createArraySuccessResponse,
   createPaginationMeta,
   createPaginatedResponse,
   createSuccessResponse,
@@ -108,7 +109,7 @@ export const partnersRouter: FastifyPluginAsync = async (fastify) => {
       ),
     ].sort((a, b) => a.localeCompare(b));
     const message = getMsg(request, "success.get");
-    return reply.status(200).send(createSuccessResponse(message, tags));
+    return reply.status(200).send(createArraySuccessResponse(message, tags));
   });
 
   /**
@@ -120,7 +121,7 @@ export const partnersRouter: FastifyPluginAsync = async (fastify) => {
     if (!parsed.success) {
       throw new BadRequestError("validation.invalidParams", parsed.error.flatten());
     }
-    const tagFilter = parsed.data.tag?.trim();
+    const tagFilter = parsed.data.tag;
     const prisma = getPrismaClient();
     const list = await prisma.partner.findMany({
       where: tagFilter ? { tag: tagFilter } : {},
@@ -129,7 +130,7 @@ export const partnersRouter: FastifyPluginAsync = async (fastify) => {
     });
     const data: PartnerItem[] = list.map(toPartnerItem);
     const message = getMsg(request, "success.list");
-    return reply.status(200).send(createSuccessResponse(message, data));
+    return reply.status(200).send(createArraySuccessResponse(message, data));
   });
 
   fastify.post<{ Body: UpsertPartnerBody }>(
@@ -147,7 +148,7 @@ export const partnersRouter: FastifyPluginAsync = async (fastify) => {
       }
       const logoTrim = body.logo.trim();
       const linkTrim = body.link.trim();
-      const tagTrim = body.tag?.trim() || null;
+      const tagTrim = body.tag ?? null;
       const description = body.description?.trim() || null;
 
       const prisma = getPrismaClient();
