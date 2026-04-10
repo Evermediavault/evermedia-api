@@ -151,6 +151,17 @@ export default {
     defaultNotFound: "默认分类不存在，无法迁移文件",
   },
 
+  // 合作伙伴
+  partner: {
+    notFound: "合作伙伴不存在",
+    nameExists: "合作伙伴名称已存在",
+  },
+
+  // Contact Us
+  contact: {
+    submitTooOften: "同一 IP 一小时内仅能提交一次",
+  },
+
   // 上传/媒体
   media: {
     fileRequired: "请选择要上传的文件",

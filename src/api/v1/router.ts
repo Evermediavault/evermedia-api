@@ -7,6 +7,8 @@ import { categoriesRouter } from "./endpoints/categories.js";
 import { statsRouter } from "./endpoints/stats.js";
 import { synapseRouter } from "./endpoints/synapse.js";
 import { allianceRouter } from "./endpoints/alliance.js";
+import { partnersRouter } from "./endpoints/partners.js";
+import { contactRouter } from "./endpoints/contact.js";
 
 /**
  * API v1 路由聚合
@@ -22,4 +24,6 @@ export const apiV1Router: FastifyPluginAsync = async (fastify) => {
   await fastify.register(statsRouter, { prefix: "/stats" });
   await fastify.register(synapseRouter, { prefix: "/synapse" });
   await fastify.register(allianceRouter, { prefix: "/alliance" });
+  await fastify.register(partnersRouter, { prefix: "/partners" });
+  await fastify.register(contactRouter, { prefix: "/contact" });
 };

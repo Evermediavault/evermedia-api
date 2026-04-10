@@ -96,3 +96,32 @@ model File {
   @@index([storage_id])
   @@index([deleted_at])
 }
+
+// 合作伙伴（展示用）
+model Partner {
+  id          Int      @id @default(autoincrement())
+  logo        String   @db.VarChar(1024)
+  tag         String?  @db.VarChar(128)
+  name        String   @unique @db.VarChar(255)
+  description String?  @db.Text
+  link        String   @db.VarChar(2048)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  @@map("ev_partners")
+}
+
+// Contact Us 表单提交（仅追加，无更新）
+model ContactSubmission {
+  id         Int      @id @default(autoincrement())
+  user_name  String   @db.VarChar(255)
+  email      String   @db.VarChar(255)
+  content    String   @db.Text
+  ip         String   @db.VarChar(45)
+  created_at DateTime @default(now())
+
+  @@map("ev_contact_submissions")
+  @@index([created_at])
+  @@index([email])
+  @@index([ip, created_at])
+}

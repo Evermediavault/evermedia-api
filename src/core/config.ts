@@ -55,6 +55,25 @@ const configSchema = z.object({
     .transform((val) => val === "true")
     .default("false"),
 
+  /**
+   * 反向代理后设为 true，Fastify 才会信任 X-Forwarded-For，request.ip 才是真实客户端 IP（限流、日志）。
+   * 生产环境部署在 Nginx/Ingress 后建议开启。
+   */
+  TRUST_PROXY: z
+    .string()
+    .transform((val) => val === "true")
+    .default("false"),
+
+  /** 公开 GET /partners 单次最多返回条数，防止全表过大拖垮内存与响应 */
+  PARTNER_PUBLIC_LIST_MAX: z
+    .string()
+    .default("500")
+    .transform((val) => {
+      const n = parseInt(val, 10);
+      if (!Number.isFinite(n) || n < 1) return 500;
+      return Math.min(n, 10_000);
+    }),
+
   // 数据库配置
   DB_HOST: z.string().default("localhost"),
   DB_PORT: z
@@ -140,7 +159,7 @@ const configSchema = z.object({
   // 默认账户配置
   DEFAULT_ADMIN_USERNAME: z.string().default("admin"),
   DEFAULT_ADMIN_PASSWORD: z.string().default("admin123456"),
-  DEFAULT_ADMIN_EMAIL: z.string().default("admin@evermediavault.com"),
+  DEFAULT_ADMIN_EMAIL: z.string().default("contact@evermediav.com"),
   DEFAULT_ADMIN_ROLE: z.string().default("admin"),
 
   // i18n 配置

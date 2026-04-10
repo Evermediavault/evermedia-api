@@ -25,6 +25,7 @@ export const createApplication = async (): Promise<FastifyInstance> => {
   const app = Fastify({
     logger: false,
     disableRequestLogging: true,
+    trustProxy: settings.TRUST_PROXY,
   });
 
   await app.register(cors, {

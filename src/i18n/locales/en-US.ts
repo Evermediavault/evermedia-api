@@ -151,6 +151,17 @@ export default {
     defaultNotFound: "Default category not found, cannot reassign files",
   },
 
+  // Partners
+  partner: {
+    notFound: "Partner not found",
+    nameExists: "Partner name already exists",
+  },
+
+  // Contact Us
+  contact: {
+    submitTooOften: "Only one submission per IP per hour is allowed",
+  },
+
   // Upload / media
   media: {
     fileRequired: "Please select a file to upload",

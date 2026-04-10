@@ -72,6 +72,15 @@ export class ConflictError extends BaseAPIException {
 }
 
 /**
+ * 请求过于频繁（如限流）
+ */
+export class TooManyRequestsError extends BaseAPIException {
+  constructor(message: string = "error.tooManyRequests", detail?: unknown) {
+    super(message, 429, detail);
+  }
+}
+
+/**
  * 服务器内部错误异常
  */
 export class InternalServerError extends BaseAPIException {
