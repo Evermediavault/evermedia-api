@@ -2,7 +2,7 @@
  * 合作伙伴路由
  * GET /partners/manage：管理员分页列表（须注册在 / 与 /:id 之前）
  * GET /partners/tags：公开；返回所有已使用标签去重后的字符串数组（无分页）
- * GET /partners：公开列表，按配置 PARTNER_PUBLIC_LIST_MAX 限制条数；Query 可选 tag（精确匹配）
+ * GET /partners：公开列表，按配置 PARTNER_PUBLIC_LIST_MAX 限制条数；Query 可选 tag（规范化后与库内一致：trim + 小写）
  * POST /partners：仅管理员；body 带 id 为更新，否则创建
  * DELETE /partners/:id：仅管理员，按主键删除
  */
@@ -105,7 +105,7 @@ export const partnersRouter: FastifyPluginAsync = async (fastify) => {
         grouped
           .map((g) => g.tag)
           .filter((t): t is string => t != null && t.trim().length > 0)
-          .map((t) => t.trim())
+          .map((t) => t.trim().toLowerCase())
       ),
     ].sort((a, b) => a.localeCompare(b));
     const message = getMsg(request, "success.get");

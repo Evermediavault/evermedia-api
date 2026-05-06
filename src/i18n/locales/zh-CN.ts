@@ -160,6 +160,7 @@ export default {
   // Contact Us
   contact: {
     submitTooOften: "同一 IP 一小时内仅能提交一次",
+    notFound: "联系提交记录不存在",
   },
 
   // 上传/媒体

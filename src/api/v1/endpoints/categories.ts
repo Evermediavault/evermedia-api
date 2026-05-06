@@ -1,6 +1,6 @@
 /**
  * 分类路由
- * GET /categories：分类列表，所有已登录用户可访问
+ * GET /categories：分类列表，公开（不鉴权）
  * POST /categories、PATCH /categories/:uid、DELETE /categories/:uid：仅管理员；分类名称不得重复；默认分类不可删除
  */
 import { FastifyPluginAsync } from "fastify";
@@ -46,43 +46,39 @@ function toCategoryListItem(row: {
 export const categoriesRouter: FastifyPluginAsync = async (fastify) => {
   /**
    * GET /categories
-   * 分页、排序；Query: page, page_size, sort_by, order；所有已登录用户可见
+   * 分页、排序；Query: page, page_size, sort_by, order；公开
    */
-  fastify.get<{ Querystring: CategoryListQuery }>(
-    "/",
-    { preHandler: [authToken, requireAuth] },
-    async (request, reply) => {
-      const parsed = CategoryListQuerySchema.safeParse(request.query);
-      if (!parsed.success) {
-        throw new BadRequestError("validation.invalidParams", parsed.error.flatten());
-      }
-      const { page, page_size, sort_by, order } = parsed.data;
-      const prisma = getPrismaClient();
-
-      const [list, total] = await Promise.all([
-        prisma.category.findMany({
-          select: {
-            id: true,
-            uid: true,
-            name: true,
-            description: true,
-            is_default: true,
-            created_at: true,
-            _count: { select: { files: true } },
-          },
-          orderBy: { [sort_by]: order },
-          skip: (page - 1) * page_size,
-          take: page_size,
-        }),
-        prisma.category.count(),
-      ]);
-
-      const data = list.map(toCategoryListItem);
-      const meta = createPaginationMeta(page, page_size, total);
-      const message = getMsg(request, "success.list");
-      return reply.status(200).send(createPaginatedResponse(message, data, meta));
+  fastify.get<{ Querystring: CategoryListQuery }>("/", async (request, reply) => {
+    const parsed = CategoryListQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      throw new BadRequestError("validation.invalidParams", parsed.error.flatten());
     }
-  );
+    const { page, page_size, sort_by, order } = parsed.data;
+    const prisma = getPrismaClient();
+
+    const [list, total] = await Promise.all([
+      prisma.category.findMany({
+        select: {
+          id: true,
+          uid: true,
+          name: true,
+          description: true,
+          is_default: true,
+          created_at: true,
+          _count: { select: { files: true } },
+        },
+        orderBy: { [sort_by]: order },
+        skip: (page - 1) * page_size,
+        take: page_size,
+      }),
+      prisma.category.count(),
+    ]);
+
+    const data = list.map(toCategoryListItem);
+    const meta = createPaginationMeta(page, page_size, total);
+    const message = getMsg(request, "success.list");
+    return reply.status(200).send(createPaginatedResponse(message, data, meta));
+  });
 
   /**
    * POST /categories

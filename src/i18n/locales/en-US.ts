@@ -160,6 +160,7 @@ export default {
   // Contact Us
   contact: {
     submitTooOften: "Only one submission per IP per hour is allowed",
+    notFound: "Contact submission not found",
   },
 
   // Upload / media

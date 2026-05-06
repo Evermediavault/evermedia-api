@@ -2,6 +2,7 @@
  * Contact Us
  * POST /contact：公开提交；同 IP 一小时内仅一次
  * GET /contact：管理员分页列表
+ * DELETE /contact/:id：管理员按 id 删除单条
  */
 import { FastifyPluginAsync } from "fastify";
 import { Prisma } from "@prisma/client";
@@ -13,10 +14,11 @@ import {
   createSuccessResponse,
 } from "../../../schemas/response.js";
 import { getMsg } from "../../../i18n/utils.js";
-import { BadRequestError, TooManyRequestsError } from "../../../core/exceptions.js";
+import { BadRequestError, NotFoundError, TooManyRequestsError } from "../../../core/exceptions.js";
 import {
   ContactSubmitBodySchema,
   ContactListQuerySchema,
+  ContactIdParamSchema,
   type ContactListItem,
   type ContactListQuery,
 } from "../../../schemas/contact.js";
@@ -125,6 +127,26 @@ export const contactRouter: FastifyPluginAsync = async (fastify) => {
       const meta = createPaginationMeta(page, page_size, total);
       const message = getMsg(request, "success.list");
       return reply.status(200).send(createPaginatedResponse(message, data, meta));
+    }
+  );
+
+  fastify.delete<{ Params: { id: string } }>(
+    "/:id",
+    { preHandler: [authToken, requireAuth, requireAdmin] },
+    async (request, reply) => {
+      const parsedId = ContactIdParamSchema.safeParse(request.params.id);
+      if (!parsedId.success) {
+        throw new BadRequestError("validation.invalidParams", parsedId.error.flatten());
+      }
+      const id = parsedId.data;
+      const prisma = getPrismaClient();
+      const existing = await prisma.contactSubmission.findUnique({ where: { id } });
+      if (!existing) {
+        throw new NotFoundError("contact.notFound");
+      }
+      await prisma.contactSubmission.delete({ where: { id } });
+      const message = getMsg(request, "success.deleted");
+      return reply.status(200).send(createSuccessResponse(message));
     }
   );
 };

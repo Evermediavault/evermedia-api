@@ -1,11 +1,14 @@
 import { z } from "zod";
 
-/** 去掉首尾空白；若为空则视为未传（undefined） */
-function trimTagOptional(max: number) {
+/**
+ * 合作伙伴 tag：trim + 小写规范化，避免 "DeFi"/"defi" 被当成不同标签。
+ * 校验长度在规范化之后执行。
+ */
+function normalizePartnerTagOptional(max: number) {
   return z.preprocess((v) => {
     if (v === undefined || v === null) return undefined;
     if (typeof v !== "string") return v;
-    const t = v.trim();
+    const t = v.trim().toLowerCase();
     return t.length === 0 ? undefined : t;
   }, z.string().max(max).optional());
 }
@@ -27,7 +30,7 @@ export const UpsertPartnerBodySchema = z
   .object({
     id: z.number().int().positive().optional(),
     logo: z.string().min(1),
-    tag: trimTagOptional(128),
+    tag: normalizePartnerTagOptional(128),
     name: z.string().min(1).max(255),
     description: z.string().max(500).optional(),
     link: z.string().min(1),
@@ -59,7 +62,7 @@ export type UpsertPartnerBody = z.infer<typeof UpsertPartnerBodySchema>;
 
 /** 公开列表查询（可选按 tag 精确筛选） */
 export const PartnerPublicListQuerySchema = z.object({
-  tag: trimTagOptional(128),
+  tag: normalizePartnerTagOptional(128),
 });
 
 export type PartnerPublicListQuery = z.infer<typeof PartnerPublicListQuerySchema>;

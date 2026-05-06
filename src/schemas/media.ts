@@ -4,6 +4,13 @@ import { z } from "zod";
 export const MediaListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   page_size: z.coerce.number().int().min(1).max(100).default(10),
+  /** 关键词：多字段子串匹配（LIKE），超长截断 */
+  word: z
+    .string()
+    .trim()
+    .max(128)
+    .optional()
+    .transform((s) => (s === undefined || s.length === 0 ? undefined : s)),
 });
 
 export type MediaListQuery = z.infer<typeof MediaListQuerySchema>;

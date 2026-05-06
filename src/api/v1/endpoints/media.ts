@@ -1,6 +1,6 @@
 /**
  * 媒体路由
- * GET  /media/list：获取文件列表（不鉴权）
+ * GET  /media/list：获取文件列表（不鉴权）；支持分页、可选 word 关键词（多字段 LIKE）
  * POST /media/upload：上传（管理员/上传者/联盟成员），multipart 必填 1～N 个 file、providerId，可选 metadata、name（显示名）
  *   - 单次请求内 1 或 N 个文件归属同一 data set（一次 createContext + Promise.all(upload)）
  */
@@ -19,10 +19,11 @@ import {
   collectPartsFromMultipart,
   type CollectedFilePart,
 } from "../../../utils/multipart.js";
-import { toErrorMessage } from "../../../utils/helpers.js";
+import { escapeMysqlLikePattern, toErrorMessage } from "../../../utils/helpers.js";
 import { settings } from "../../../core/config.js";
 import { getLogger } from "../../../core/logger.js";
 import { BaseAPIException, UnauthorizedError, BadRequestError } from "../../../core/exceptions.js";
+import type { Prisma } from "@prisma/client";
 
 const log = getLogger("media");
 
@@ -276,6 +277,23 @@ async function uploadToSynapseAndPersist(
   return created;
 }
 
+function buildPublicMediaListWhere(word?: string): Prisma.FileWhereInput {
+  const base: Prisma.FileWhereInput = { deleted_at: null, permission: "public" };
+  if (!word) return base;
+  const needle = escapeMysqlLikePattern(word);
+  return {
+    ...base,
+    OR: [
+      { name: { contains: needle } },
+      { file_type: { contains: needle } },
+      { synapse_index_id: { contains: needle } },
+      { project_name: { contains: needle } },
+      { category: { name: { contains: needle } } },
+      { uploader: { username: { contains: needle } } },
+    ],
+  };
+}
+
 export const mediaRouter: FastifyPluginAsync = async (fastify) => {
   /**
    * GET /storage-info
@@ -305,20 +323,21 @@ export const mediaRouter: FastifyPluginAsync = async (fastify) => {
 
   /**
    * GET /list
-   * 不鉴权；仅返回 permission=public 且未删除的文件，支持分页
+   * 不鉴权；仅返回 permission=public 且未删除的文件，支持分页；可选 word 多字段 LIKE（Prisma 参数化）
    */
   fastify.get<{
-    Querystring: { page?: string; page_size?: string };
+    Querystring: { page?: string; page_size?: string; word?: string };
   }>("/list", async (request, reply) => {
     const parsed = MediaListQuerySchema.safeParse(request.query);
     if (!parsed.success) {
       throw new BadRequestError("validation.invalidParams");
     }
-    const { page, page_size: pageSize } = parsed.data;
+    const { page, page_size: pageSize, word } = parsed.data;
+    const where = buildPublicMediaListWhere(word);
     const prisma = getPrismaClient();
     const [list, total] = await Promise.all([
       prisma.file.findMany({
-        where: { deleted_at: null, permission: "public" },
+        where,
         orderBy: { uploaded_at: "desc" },
         skip: (page - 1) * pageSize,
         take: pageSize,
@@ -336,7 +355,7 @@ export const mediaRouter: FastifyPluginAsync = async (fastify) => {
           uploader: { select: { username: true } },
         },
       }),
-      prisma.file.count({ where: { deleted_at: null, permission: "public" } }),
+      prisma.file.count({ where }),
     ]);
     const data = list.map((f) => fileToUploadItem(f));
     const message = getMsg(request, "success.list");

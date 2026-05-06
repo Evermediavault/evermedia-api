@@ -32,3 +32,6 @@ export const ContactSubmitBodySchema = z.object({
 });
 
 export type ContactSubmitBody = z.infer<typeof ContactSubmitBodySchema>;
+
+/** 路径参数 :id（正整数） */
+export const ContactIdParamSchema = z.coerce.number().int().positive();
