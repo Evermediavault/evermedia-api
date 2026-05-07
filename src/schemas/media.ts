@@ -4,6 +4,11 @@ import { z } from "zod";
 export const MediaListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   page_size: z.coerce.number().int().min(1).max(100).default(10),
+  /** Synapse 存储 provider id，与 GET /media/storage-info 的 providers[].id 一致 */
+  storage_id: z.preprocess(
+    (v) => (v === "" || v === undefined || v === null ? undefined : v),
+    z.coerce.number().int().positive().optional(),
+  ),
   /** 关键词：多字段子串匹配（LIKE），超长截断 */
   word: z
     .string()

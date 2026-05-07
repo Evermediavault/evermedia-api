@@ -1,6 +1,6 @@
 /**
  * 媒体路由
- * GET  /media/list：获取文件列表（不鉴权）；支持分页、可选 word 关键词（多字段 LIKE）
+ * GET  /media/list：获取文件列表（不鉴权）；支持分页、可选 word、可选 storage_id
  * POST /media/upload：上传（管理员/上传者/联盟成员），multipart 必填 1～N 个 file、providerId，可选 metadata、name（显示名）
  *   - 单次请求内 1 或 N 个文件归属同一 data set（一次 createContext + Promise.all(upload)）
  */
@@ -277,10 +277,14 @@ async function uploadToSynapseAndPersist(
   return created;
 }
 
-function buildPublicMediaListWhere(word?: string): Prisma.FileWhereInput {
-  const base: Prisma.FileWhereInput = { deleted_at: null, permission: "public" };
-  if (!word) return base;
-  const needle = escapeMysqlLikePattern(word);
+function buildPublicMediaListWhere(opts: { word?: string; storageId?: number }): Prisma.FileWhereInput {
+  const base: Prisma.FileWhereInput = {
+    deleted_at: null,
+    permission: "public",
+    ...(opts.storageId !== undefined ? { storage_id: opts.storageId } : {}),
+  };
+  if (!opts.word) return base;
+  const needle = escapeMysqlLikePattern(opts.word);
   return {
     ...base,
     OR: [
@@ -323,17 +327,17 @@ export const mediaRouter: FastifyPluginAsync = async (fastify) => {
 
   /**
    * GET /list
-   * 不鉴权；仅返回 permission=public 且未删除的文件，支持分页；可选 word 多字段 LIKE（Prisma 参数化）
+   * 不鉴权；仅返回 permission=public 且未删除的文件，支持分页；可选 word、可选 storage_id
    */
   fastify.get<{
-    Querystring: { page?: string; page_size?: string; word?: string };
+    Querystring: { page?: string; page_size?: string; word?: string; storage_id?: string };
   }>("/list", async (request, reply) => {
     const parsed = MediaListQuerySchema.safeParse(request.query);
     if (!parsed.success) {
       throw new BadRequestError("validation.invalidParams");
     }
-    const { page, page_size: pageSize, word } = parsed.data;
-    const where = buildPublicMediaListWhere(word);
+    const { page, page_size: pageSize, word, storage_id: storageId } = parsed.data;
+    const where = buildPublicMediaListWhere({ word, storageId });
     const prisma = getPrismaClient();
     const [list, total] = await Promise.all([
       prisma.file.findMany({
